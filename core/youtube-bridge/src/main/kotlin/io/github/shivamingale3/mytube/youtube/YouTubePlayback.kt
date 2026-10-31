@@ -3,6 +3,7 @@ package io.github.shivamingale3.mytube.youtube
 import android.content.Context
 import com.liskovsoft.googlecommon.common.helpers.DefaultHeaders
 import com.liskovsoft.mediaserviceinterfaces.MediaItemService
+import com.liskovsoft.mediaserviceinterfaces.ServiceManager
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo
 import io.github.shivamingale3.mytube.model.CaptionTrack
 import io.github.shivamingale3.mytube.model.PlaybackInfo
@@ -14,11 +15,20 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Resolves a video ID to ad-free streams through MediaServiceCore. */
 class YouTubePlayback(context: Context) {
-    private val items: MediaItemService by lazy { MediaServiceCore.services(context).mediaItemService }
+    private val services: ServiceManager by lazy { MediaServiceCore.services(context) }
+    private val items: MediaItemService by lazy { services.mediaItemService }
+
+    // Client switching is global state in MediaServiceCore, so resolve one video at a time.
+    private val resolving = Mutex()
+
+    /** After no client offered DASH or HLS, don't cycle through them again for a while. */
+    private var skipClientSearchUntil = 0L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefetched = mutableMapOf<String, Pair<Long, Deferred<PlaybackInfo>>>()
@@ -49,32 +59,62 @@ class YouTubePlayback(context: Context) {
     private companion object {
         // Stream URLs stay valid for hours; a short window keeps the cache honest.
         const val PREFETCH_TTL_MS = 10 * 60_000L
+
+        // MediaServiceCore knows about ten YouTube clients; a few tries usually reach one with DASH.
+        const val MAX_CLIENT_TRIES = 6
+        const val CLIENT_SEARCH_BACKOFF_MS = 30 * 60_000L
     }
 
+    /**
+     * Some YouTube clients now only offer SABR streams (which need SmartTube's modified ExoPlayer)
+     * plus a single 360p file. Switch clients until one offers DASH or HLS; MediaServiceCore keeps
+     * the working client for the next videos. Falls back to the first playable answer.
+     */
     private suspend fun resolve(videoId: String): PlaybackInfo = withContext(Dispatchers.IO) {
-        val info = items.getFormatInfo(videoId)
-            ?: throw PlaybackUnavailableException("YouTube returned no stream information")
-        if (info.isUnplayable) {
-            throw PlaybackUnavailableException(info.playabilityReason ?: "This video can't be played")
+        resolving.withLock {
+            var fallback: MediaItemFormatInfo? = null
+            var refusal: String? = null
+            val tries = if (System.currentTimeMillis() < skipClientSearchUntil) 1 else MAX_CLIENT_TRIES
+            repeat(tries) {
+                val info = items.getFormatInfo(videoId)
+                when {
+                    info == null -> Unit
+                    info.isUnplayable -> refusal = refusal ?: info.playabilityReason
+                    info.hasAdaptiveStreams() -> return@withContext info.toPlaybackInfo(videoId)
+                    fallback == null -> fallback = info
+                }
+                if (tries > 1) services.switchNextClientNow()
+            }
+            if (fallback != null && tries > 1) skipClientSearchUntil = System.currentTimeMillis() + CLIENT_SEARCH_BACKOFF_MS
+            fallback?.toPlaybackInfo(videoId)
+                ?: throw PlaybackUnavailableException(refusal ?: "YouTube returned no stream information")
         }
-        PlaybackInfo(
-            videoId = videoId,
-            title = info.title.orEmpty(),
-            channelName = info.author,
-            isLive = info.isLive,
-            source = info.pickSource(),
-            userAgent = info.clientInfo?.userAgent ?: DefaultHeaders.APP_USER_AGENT,
-            captions = info.subtitles.orEmpty().mapNotNull { sub ->
-                val url = sub.baseUrl ?: return@mapNotNull null
-                CaptionTrack(
-                    url = url,
-                    languageCode = sub.languageCode,
-                    label = sub.name?.takeIf { it.isNotBlank() } ?: sub.languageCode ?: "Captions",
-                    mimeType = sub.mimeType ?: "text/vtt",
-                )
-            },
-        )
     }
+}
+
+private fun MediaItemFormatInfo.hasAdaptiveStreams() =
+    containsDashFormats() || containsHlsUrl() || containsDashUrl()
+
+private fun MediaItemFormatInfo.toPlaybackInfo(videoId: String): PlaybackInfo {
+    val source = pickSource()
+    return PlaybackInfo(
+        videoId = videoId,
+        title = title.orEmpty(),
+        channelName = author,
+        isLive = isLive,
+        source = source,
+        userAgent = clientInfo?.userAgent ?: DefaultHeaders.APP_USER_AGENT,
+        captions = if (source is StreamSource.DashManifest) emptyList() else subtitles.orEmpty().mapNotNull { sub ->
+            val url = sub.baseUrl ?: return@mapNotNull null
+            CaptionTrack(
+                url = url,
+                languageCode = sub.languageCode,
+                label = sub.name?.takeIf { it.isNotBlank() } ?: sub.languageCode ?: "Captions",
+                mimeType = sub.mimeType ?: "text/vtt",
+            )
+        },
+        clientName = clientInfo?.clientName,
+    )
 }
 
 /** Same preference order as SmartTube, minus SABR, which needs its modified ExoPlayer. */

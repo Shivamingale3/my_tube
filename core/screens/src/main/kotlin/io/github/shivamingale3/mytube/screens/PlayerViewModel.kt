@@ -45,6 +45,8 @@ data class PlayerUiState(
     val captions: List<CaptionChoice> = emptyList(),
     val caption: CaptionChoice? = null,
     val speed: Float = 1f,
+    /** Stream type and YouTube client, e.g. "DASH · TV"; shown for troubleshooting. */
+    val sourceLabel: String? = null,
 ) {
     enum class Phase { Resolving, Buffering, Ready, Ended, Failed }
 
@@ -99,7 +101,15 @@ class PlayerViewModel(
 
     private fun start(info: PlaybackInfo) {
         controller.play(info)
-        _state.update { it.copy(phase = PlayerUiState.Phase.Buffering, title = info.title.ifBlank { it.title }, channelName = info.channelName ?: it.channelName, isLive = info.isLive) }
+        _state.update {
+            it.copy(
+                phase = PlayerUiState.Phase.Buffering,
+                title = info.title.ifBlank { it.title },
+                channelName = info.channelName ?: it.channelName,
+                isLive = info.isLive,
+                sourceLabel = listOfNotNull(info.source.label, info.clientName).joinToString(" · "),
+            )
+        }
         tickJob?.cancel()
         tickJob = viewModelScope.launch {
             while (isActive) {
