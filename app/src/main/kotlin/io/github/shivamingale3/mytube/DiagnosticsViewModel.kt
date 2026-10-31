@@ -49,14 +49,15 @@ class DiagnosticsViewModel(
         refreshAccounts()
     }
 
+    private var homeJob: Job? = null
+
     fun loadHome() {
+        homeJob?.cancel()
         _state.value = State.Loading
-        viewModelScope.launch {
-            _state.value = runCatching { youTube.home() }
-                .fold(
-                    onSuccess = { State.Loaded(it) },
-                    onFailure = { State.Failed(it.toString()) },
-                )
+        homeJob = viewModelScope.launch {
+            youTube.home()
+                .catch { _state.value = State.Failed(it.toString()) }
+                .collect { _state.value = State.Loaded(it) }
         }
     }
 

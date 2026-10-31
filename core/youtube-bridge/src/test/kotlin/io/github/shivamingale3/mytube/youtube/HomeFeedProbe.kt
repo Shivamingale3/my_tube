@@ -11,6 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import android.os.Looper
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -34,7 +35,7 @@ class HomeFeedProbe {
     @Test
     fun probeBridgeHome() {
         val source = YouTubeSource(RuntimeEnvironment.getApplication())
-        val feed = pumpUntilDone { runBlocking { source.home() } }
+        val feed = pumpUntilDone { runBlocking { source.home().last() } }
         println("PROBE bridge home personalized=${feed.personalized} rows=${feed.rows.size}")
         feed.rows.forEach { println("PROBE   row '${it.title}' videos=${it.videos.size}") }
     }
