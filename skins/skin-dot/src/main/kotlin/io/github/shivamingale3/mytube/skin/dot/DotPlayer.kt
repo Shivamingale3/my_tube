@@ -217,10 +217,11 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
         ) {
             Box(Modifier.size(8.dp).background(if (state.isPlaying) DotColors.Accent else DotColors.TextDim, CircleShape))
             Text(
-                listOf(if (state.isPlaying) "PLAYING" else "PAUSED", state.qualityLabel.uppercase(), speedLabel(state.speed)).joinToString(" · "),
+                listOfNotNull(if (state.isPlaying) "PLAYING" else "PAUSED", state.qualityLabel.uppercase(), speedLabel(state.speed)).joinToString(" · "),
                 style = DotType.Nav.copy(fontSize = 13.sp),
                 color = DotColors.Text,
             )
+            state.sourceLabel?.let { Text(it.uppercase(), style = DotType.Nav.copy(fontSize = 13.sp), color = DotColors.TextDim) }
         }
         Column(Modifier.align(Alignment.BottomStart).padding(start = 64.dp, end = 64.dp, bottom = 40.dp)) {
             state.channelName?.let { Text(it.uppercase(), style = DotType.Label.copy(fontSize = 13.sp), color = Color(0xFFBDBDBD)) }

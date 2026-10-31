@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.5.0"
+        versionCode = 8
+        versionName = "0.5.1"
         missingDimensionStrategy("default", "ststable")
         ndk {
             // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
