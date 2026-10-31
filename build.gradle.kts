@@ -36,6 +36,15 @@ subprojects {
         }
     }
 
+    // youtubeapi ships beta/stable/fdroid flavours; every module that reaches it, directly or not, uses stable.
+    if (externalNamespace == null) {
+        pluginManager.withPlugin("com.android.base") {
+            extensions.configure<com.android.build.api.dsl.CommonExtension<*, *, *, *, *, *>>("android") {
+                defaultConfig.missingDimensionStrategy("default", "ststable")
+            }
+        }
+    }
+
     configurations.configureEach {
         resolutionStrategy {
             // youtubeapi asks for kotlinx-coroutines-android at the Kotlin version, which does not exist.

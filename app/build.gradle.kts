@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.0"
+        versionCode = 6
+        versionName = "0.4.0"
         missingDimensionStrategy("default", "ststable")
         ndk {
             // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
@@ -64,6 +64,11 @@ kotlin {
 dependencies {
     implementation(project(":core:youtube-bridge"))
     implementation(project(":core:player"))
+    implementation(project(":core:screens"))
+    implementation(project(":skins:skin-dot"))
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.ktor)
+    implementation(libs.ktor.client.android)
     implementation(libs.media3.ui)
 
     implementation(platform(libs.compose.bom))

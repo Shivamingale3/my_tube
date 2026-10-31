@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -25,9 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Button
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.tv.material3.darkColorScheme
 import org.koin.androidx.compose.koinViewModel
 
 private val Muted = Color(0xFFA3A3A3)
@@ -37,23 +32,13 @@ private val Ok = Color(0xFF00D26A)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                var playing by rememberSaveable { mutableStateOf<String?>(null) }
-                val videoId = playing
-                if (videoId == null) {
-                    DiagnosticsScreen(onPlay = { playing = it })
-                } else {
-                    PlayerScreen(videoId, onBack = { playing = null })
-                }
-            }
-        }
+        setContent { MyTubeRoot() }
     }
 }
 
-/** Temporary diagnostics screen; replaced by the skins in later steps. */
+/** Temporary account and diagnostics screen, opened from the account circle until Settings exists. */
 @Composable
-private fun DiagnosticsScreen(onPlay: (String) -> Unit, viewModel: DiagnosticsViewModel = koinViewModel()) {
+internal fun DiagnosticsScreen(onPlay: (String) -> Unit, viewModel: DiagnosticsViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val signIn by viewModel.signIn.collectAsStateWithLifecycle()
     val accounts by viewModel.accountList.collectAsStateWithLifecycle()

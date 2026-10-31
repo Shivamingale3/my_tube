@@ -4,6 +4,7 @@ import android.content.Context
 import com.liskovsoft.mediaserviceinterfaces.ContentService
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem
+import io.github.shivamingale3.mytube.model.ChannelSummary
 import io.github.shivamingale3.mytube.model.HomeFeed
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.model.VideoRow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.rx2.asFlow
 import kotlinx.coroutines.rx2.await
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -45,6 +47,18 @@ class YouTubeSource(context: Context) {
 
     /** Stops paging once Home has enough rows; cancelling the collection disposes the request. */
     private class HomeIsFull : RuntimeException()
+
+    /** Watch history, newest first. Empty when signed out. */
+    suspend fun history(): List<Video> = withContext(Dispatchers.IO) {
+        runCatching { content.history?.mediaItems.orEmpty().mapNotNull { it.toVideo() } }.getOrDefault(emptyList())
+    }
+
+    /** Subscribed channels, those with new uploads first. Empty when signed out. */
+    suspend fun subscribedChannels(): List<ChannelSummary> = withContext(Dispatchers.IO) {
+        runCatching {
+            content.subscribedChannelsByNewContent?.mediaItems.orEmpty().mapNotNull { it.toChannel() }
+        }.getOrDefault(emptyList())
+    }
 
     private suspend fun signedOutRows(): List<VideoRow> = coroutineScope {
         val sections = listOf(
@@ -82,6 +96,16 @@ private fun MediaGroup.toRow(prefix: String? = null): VideoRow? {
         else -> "$prefix · $name"
     }
     return VideoRow(title = rowTitle, videos = videos)
+}
+
+private fun MediaItem.toChannel(): ChannelSummary? {
+    val id = channelId ?: return null
+    return ChannelSummary(
+        id = id,
+        name = title?.takeIf { it.isNotBlank() } ?: author.orEmpty(),
+        avatarUrl = cardImageUrl,
+        hasNewContent = hasNewContent(),
+    )
 }
 
 private fun MediaItem.toVideo(): Video? {
