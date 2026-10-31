@@ -10,6 +10,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import android.os.Looper
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -36,6 +37,15 @@ class HomeFeedProbe {
         val feed = pumpUntilDone { runBlocking { source.home() } }
         println("PROBE bridge home personalized=${feed.personalized} rows=${feed.rows.size}")
         feed.rows.forEach { println("PROBE   row '${it.title}' videos=${it.videos.size}") }
+    }
+
+    @Test
+    fun probeSignInCode() {
+        val accounts = YouTubeAccounts(RuntimeEnvironment.getApplication())
+        // Only fetch a code; collecting stops at the first emission, which abandons the attempt.
+        val first = pumpUntilDone { runBlocking { accounts.signIn().first() } }
+        println("PROBE sign-in first step: $first")
+        println("PROBE accounts: ${pumpUntilDone { runBlocking { accounts.accounts() } }}")
     }
 
     @Test
