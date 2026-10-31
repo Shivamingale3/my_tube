@@ -26,6 +26,7 @@ kotlin {
 dependencies {
     api(project(":core:model"))
     implementation(project(":core:youtube-bridge"))
+    api(project(":core:player"))
     api(libs.lifecycle.viewmodel)
     implementation(libs.kotlinx.coroutines.android)
 }

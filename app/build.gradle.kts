@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4.0"
+        versionCode = 7
+        versionName = "0.5.0"
         missingDimensionStrategy("default", "ststable")
         ndk {
             // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
@@ -69,7 +69,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.ktor)
     implementation(libs.ktor.client.android)
-    implementation(libs.media3.ui)
+    implementation(libs.media3.ui.compose)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

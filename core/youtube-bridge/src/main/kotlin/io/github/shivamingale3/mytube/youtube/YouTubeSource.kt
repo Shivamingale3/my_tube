@@ -48,9 +48,14 @@ class YouTubeSource(context: Context) {
     /** Stops paging once Home has enough rows; cancelling the collection disposes the request. */
     private class HomeIsFull : RuntimeException()
 
-    /** Watch history, newest first. Empty when signed out. */
+    /**
+     * Watch history, newest first. Empty when signed out. YouTube Music tracks are left out:
+     * they need YouTube Music's own client and fail with HTTP 403 through the regular one.
+     */
     suspend fun history(): List<Video> = withContext(Dispatchers.IO) {
-        runCatching { content.history?.mediaItems.orEmpty().mapNotNull { it.toVideo() } }.getOrDefault(emptyList())
+        runCatching {
+            content.history?.mediaItems.orEmpty().filterNot { it.isYouTubeMusic() }.mapNotNull { it.toVideo() }
+        }.getOrDefault(emptyList())
     }
 
     /** Subscribed channels, those with new uploads first. Empty when signed out. */
@@ -97,6 +102,9 @@ private fun MediaGroup.toRow(prefix: String? = null): VideoRow? {
     }
     return VideoRow(title = rowTitle, videos = videos)
 }
+
+/** Music tracks come typed as music or from auto-generated "Artist - Topic" channels. */
+private fun MediaItem.isYouTubeMusic() = type == MediaItem.TYPE_MUSIC || author?.trimEnd()?.endsWith("- Topic") == true
 
 private fun MediaItem.toChannel(): ChannelSummary? {
     val id = channelId ?: return null

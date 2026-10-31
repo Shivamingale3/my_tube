@@ -2,12 +2,14 @@ package io.github.shivamingale3.mytube.skin.dot
 
 import androidx.compose.runtime.Composable
 import io.github.shivamingale3.mytube.screens.HomeUiState
+import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.skin.HomeActions
+import io.github.shivamingale3.mytube.skin.PlayerActions
 import io.github.shivamingale3.mytube.skin.ShellActions
 import io.github.shivamingale3.mytube.skin.ShellState
 import io.github.shivamingale3.mytube.skin.Skin
 
-/** Dot: dot-matrix type, black and white, thumbnails grey until focused. The default skin. */
+/** Dot: dot-matrix type, black and white, thumbnails under a dot screen until focused. The default skin. */
 object DotSkin : Skin {
     override val id = "dot"
     override val displayName = "Dot"
@@ -21,4 +23,8 @@ object DotSkin : Skin {
 
     @Composable
     override fun Home(state: HomeUiState, actions: HomeActions) = DotHome(state, actions)
+
+    @Composable
+    override fun Player(state: PlayerUiState, actions: PlayerActions, surface: @Composable () -> Unit) =
+        DotPlayer(state, actions, surface)
 }

@@ -3,7 +3,10 @@ package io.github.shivamingale3.mytube.skin
 import androidx.compose.runtime.Composable
 import io.github.shivamingale3.mytube.model.UserAccount
 import io.github.shivamingale3.mytube.model.Video
+import io.github.shivamingale3.mytube.player.CaptionChoice
+import io.github.shivamingale3.mytube.player.VideoQuality
 import io.github.shivamingale3.mytube.screens.HomeUiState
+import io.github.shivamingale3.mytube.screens.PlayerUiState
 
 /** Top-level destinations every skin offers in its navigation. */
 enum class Tab { Home, Subscriptions, Library, Search }
@@ -22,6 +25,18 @@ class HomeActions(
     val play: (Video) -> Unit,
     val openSubscriptions: () -> Unit,
     val openAccount: () -> Unit,
+    /** A video card got focus; used to start loading it ahead of a press. */
+    val focus: (Video) -> Unit = {},
+)
+
+class PlayerActions(
+    val togglePlay: () -> Unit,
+    val seekBy: (deltaMs: Long) -> Unit,
+    val skipSegment: () -> Unit,
+    val setQuality: (VideoQuality?) -> Unit,
+    val setCaption: (CaptionChoice?) -> Unit,
+    val setSpeed: (Float) -> Unit,
+    val retry: () -> Unit,
 )
 
 /**
@@ -42,4 +57,12 @@ interface Skin {
 
     @Composable
     fun Home(state: HomeUiState, actions: HomeActions)
+
+    /**
+     * The full-screen player. [surface] draws the video itself; the skin places it and draws
+     * loading, controls, settings and the skip button around it. Back exits unless the skin
+     * consumes it first (for example to close a menu or hide the controls).
+     */
+    @Composable
+    fun Player(state: PlayerUiState, actions: PlayerActions, surface: @Composable () -> Unit)
 }

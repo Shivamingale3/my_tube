@@ -73,7 +73,7 @@ private fun AccountCircle(state: ShellState, onClick: () -> Unit) {
         ) {
             val avatar = state.account?.avatarUrl
             if (avatar != null) {
-                DotAvatar(avatar, size = 32.dp, inColor = true)
+                DotAvatar(avatar, size = 32.dp)
             } else {
                 Text(initial, style = DotType.Wordmark.copy(fontSize = 18.sp), color = DotColors.Text)
             }

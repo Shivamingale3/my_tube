@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -47,7 +48,7 @@ internal fun DotHome(state: HomeUiState, actions: HomeActions) {
         ) {
             item(key = "top") { TopCards(state, actions) }
             itemsIndexed(state.rows, key = { i, row -> "$i:${row.title}" }) { index, row ->
-                VideoRowSection(row, label = if (index == 0) "UP NEXT" else row.title.uppercase(), onPlay = actions.play)
+                VideoRowSection(row, label = if (index == 0) "UP NEXT" else row.title.uppercase(), onFocus = actions.focus, onPlay = actions.play)
             }
         }
     }
@@ -104,21 +105,21 @@ private fun Featured(video: Video, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun SideCard(onClick: (() -> Unit)?, content: @Composable () -> Unit) {
-    DotFocusable(onClick = onClick, radius = 28.dp, modifier = Modifier.size(408.dp, 172.dp)) { _ ->
+private fun SideCard(onClick: (() -> Unit)?, content: @Composable (focused: Boolean) -> Unit) {
+    DotFocusable(onClick = onClick, radius = 28.dp, modifier = Modifier.size(408.dp, 172.dp)) { focused ->
         Box(
             Modifier.fillMaxSize()
                 .background(DotColors.Surface, CardShape)
                 .border(1.dp, DotColors.SurfaceBorder, CardShape)
                 .padding(20.dp),
-        ) { content() }
+        ) { content(focused) }
     }
 }
 
 @Composable
 private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
     val video = state.continueWatching
-    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openAccount else null) {
+    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openAccount else null) { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("CONTINUE", style = DotType.Label, color = DotColors.TextDim)
             if (video == null) {
@@ -129,7 +130,7 @@ private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    DotThumbnail(video.thumbnailUrl, focused = false, radius = 12.dp, modifier = Modifier.size(128.dp, 72.dp))
+                    DotThumbnail(video.thumbnailUrl, focused = focused, radius = 12.dp, modifier = Modifier.size(128.dp, 72.dp))
                     Text(video.title, style = DotType.Title, color = DotColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -144,7 +145,7 @@ private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
 @Composable
 private fun NewUploadsCard(state: HomeUiState, actions: HomeActions) {
     val channels = state.channels
-    SideCard(onClick = if (channels.isNotEmpty()) actions.openSubscriptions else if (!state.personalized) actions.openAccount else null) {
+    SideCard(onClick = if (channels.isNotEmpty()) actions.openSubscriptions else if (!state.personalized) actions.openAccount else null) { _ ->
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Text("NEW UPLOADS", style = DotType.Label, color = DotColors.TextDim)
@@ -182,7 +183,7 @@ private fun ChannelDot(channel: ChannelSummary) {
 }
 
 @Composable
-private fun VideoRowSection(row: VideoRow, label: String, onPlay: (Video) -> Unit) {
+private fun VideoRowSection(row: VideoRow, label: String, onFocus: (Video) -> Unit, onPlay: (Video) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
             "$label — ${row.videos.size.toString().padStart(2, '0')}",
@@ -191,15 +192,17 @@ private fun VideoRowSection(row: VideoRow, label: String, onPlay: (Video) -> Uni
             maxLines = 1,
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(row.videos, key = { it.id }) { video -> VideoCard(video) { onPlay(video) } }
+            items(row.videos, key = { it.id }) { video -> VideoCard(video, onFocus = { onFocus(video) }) { onPlay(video) } }
         }
     }
 }
 
 @Composable
-private fun VideoCard(video: Video, onPlay: () -> Unit) {
-    val lift = if (LocalThumbStyle.current == ThumbStyle.Lift) 1.06f else 1f
-    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = lift) { focused -> VideoCardContent(video, focused) }
+private fun VideoCard(video: Video, onFocus: () -> Unit, onPlay: () -> Unit) {
+    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale) { focused ->
+        if (focused) LaunchedEffect(video.id) { onFocus() }
+        VideoCardContent(video, focused)
+    }
 }
 
 @Composable
