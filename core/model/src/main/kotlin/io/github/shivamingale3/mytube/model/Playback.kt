@@ -9,8 +9,13 @@ data class PlaybackInfo(
     val source: StreamSource,
     /** Stream hosts expect requests with the same client identity the streams were issued to. */
     val userAgent: String,
-    /** Caption tracks YouTube offers, loaded alongside the video; none is shown until picked. */
+    /**
+     * Caption tracks to load alongside the video; none is shown until picked. Empty for
+     * [StreamSource.DashManifest], whose manifest already lists the captions.
+     */
     val captions: List<CaptionTrack> = emptyList(),
+    /** Which YouTube client the streams came from, e.g. "TV"; shown for troubleshooting. */
+    val clientName: String? = null,
 )
 
 data class CaptionTrack(
@@ -22,6 +27,13 @@ data class CaptionTrack(
 
 /** Where the player reads the audio and video from. */
 sealed interface StreamSource {
+    /** Short name for troubleshooting: DASH, HLS or FILE. */
+    val label: String get() = when (this) {
+        is DashManifest, is DashUrl -> "DASH"
+        is Hls -> "HLS"
+        is Progressive -> "FILE"
+    }
+
     /** A DASH manifest built locally from the video's adaptive formats. */
     data class DashManifest(val xml: String) : StreamSource
 

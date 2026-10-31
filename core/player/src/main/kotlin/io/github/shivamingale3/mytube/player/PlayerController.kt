@@ -182,7 +182,8 @@ class PlayerController(context: Context) {
                 .setLanguage(track.languageCode)
                 .setLabel(track.label)
                 .build()
-            SingleSampleMediaSource.Factory(http).createMediaSource(config, C.TIME_UNSET)
+            // A caption that fails to load must never stop the video.
+            SingleSampleMediaSource.Factory(http).setTreatLoadErrorsAsEndOfStream(true).createMediaSource(config, C.TIME_UNSET)
         }
         return MergingMediaSource(video, *textSources.toTypedArray())
     }
