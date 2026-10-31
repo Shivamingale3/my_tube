@@ -4,12 +4,14 @@ An ad-free YouTube client for Android TV, with two switchable skins (Dot and Ton
 
 ## Install on a TV
 
-1. Download the latest `mytube-debug-*` artifact from the **Actions** tab and unzip it.
-2. With wireless debugging enabled on the TV:
+Every push to `main` publishes a release; the newest APK is always at
+`https://github.com/Shivamingale3/my_tube/releases/latest/download/MyTube.apk`.
+
+With the TV connected over adb:
 
 ```bash
-adb connect <TV_IP>:<PORT>
-adb install -r app-debug.apk
+curl -L -o MyTube.apk https://github.com/Shivamingale3/my_tube/releases/latest/download/MyTube.apk
+adb install -r MyTube.apk
 ```
 
 Builds are signed with the fixed debug key in `app/debug.keystore`, so each new build installs over the previous one.
