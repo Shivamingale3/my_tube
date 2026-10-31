@@ -12,8 +12,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.rx2.asFlow
 import kotlinx.coroutines.rx2.await
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -24,14 +27,24 @@ class YouTubeSource(context: Context) {
     private val content: ContentService by lazy { MediaServiceCore.services(context).contentService }
 
     /**
-     * The signed-in home feed, or, when YouTube returns nothing (no account), rows built from
-     * the sections that still work signed out. Rows without videos are dropped.
+     * The home feed, emitted again each time YouTube sends another page of rows, so the first
+     * rows show up quickly. When YouTube returns nothing (no account), emits once with rows built
+     * from the sections that still work signed out. Rows without videos are dropped.
      */
-    suspend fun home(): HomeFeed = withContext(Dispatchers.IO) {
-        val personal = content.home.orEmpty().mapNotNull { it.toRow() }
-        if (personal.isNotEmpty()) return@withContext HomeFeed(personal, personalized = true)
-        HomeFeed(signedOutRows(), personalized = false)
-    }
+    fun home(): Flow<HomeFeed> = flow {
+        val rows = mutableListOf<VideoRow>()
+        runCatching {
+            content.homeObserve.asFlow().collect { page ->
+                rows += page.mapNotNull { it.toRow() }
+                if (rows.isNotEmpty()) emit(HomeFeed(rows.toList(), personalized = true))
+                if (rows.size >= MAX_HOME_ROWS) throw HomeIsFull()
+            }
+        }.onFailure { if (it !is HomeIsFull) throw it }
+        if (rows.isEmpty()) emit(HomeFeed(signedOutRows(), personalized = false))
+    }.flowOn(Dispatchers.IO)
+
+    /** Stops paging once Home has enough rows; cancelling the collection disposes the request. */
+    private class HomeIsFull : RuntimeException()
 
     private suspend fun signedOutRows(): List<VideoRow> = coroutineScope {
         val sections = listOf(
@@ -55,6 +68,7 @@ class YouTubeSource(context: Context) {
 
     private companion object {
         const val FEED_TIMEOUT_MS = 30_000L
+        const val MAX_HOME_ROWS = 40
     }
 }
 
