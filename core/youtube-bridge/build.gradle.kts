@@ -13,6 +13,14 @@ android {
         missingDimensionStrategy("default", "ststable")
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // Live probes hit YouTube; run them only with -PliveProbe.
+            it.systemProperty("mytube.liveProbe", project.hasProperty("liveProbe").toString())
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -31,4 +39,9 @@ dependencies {
     implementation(project(":mediaserviceinterfaces"))
     implementation(project(":sharedutils"))
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.rx2)
+    implementation(libs.rxjava2)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

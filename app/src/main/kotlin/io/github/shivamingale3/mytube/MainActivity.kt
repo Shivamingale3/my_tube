@@ -54,8 +54,11 @@ private fun DiagnosticsScreen(viewModel: DiagnosticsViewModel = koinViewModel())
             DiagnosticsViewModel.State.Loading -> Text("Loading…", color = Color.White)
             is DiagnosticsViewModel.State.Failed -> Text("Failed: ${s.message}", color = Color(0xFFFF2E4D))
             is DiagnosticsViewModel.State.Loaded -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                item { Text("${s.rows.size} rows loaded", color = Color(0xFF00D26A)) }
-                items(s.rows) { row ->
+                item {
+                    val source = if (s.feed.personalized) "your home feed" else "signed out · popular sections"
+                    Text("${s.feed.rows.size} rows loaded ($source)", color = Color(0xFF00D26A))
+                }
+                items(s.feed.rows) { row ->
                     Text(
                         "${row.title} — ${row.videos.size} videos · first: ${row.videos.first().title}",
                         color = Color.White,

@@ -2,7 +2,7 @@ package io.github.shivamingale3.mytube
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.github.shivamingale3.mytube.model.VideoRow
+import io.github.shivamingale3.mytube.model.HomeFeed
 import io.github.shivamingale3.mytube.youtube.YouTubeSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +15,7 @@ class DiagnosticsViewModel(private val youTube: YouTubeSource) : ViewModel() {
     sealed interface State {
         data object Idle : State
         data object Loading : State
-        data class Loaded(val rows: List<VideoRow>) : State
+        data class Loaded(val feed: HomeFeed) : State
         data class Failed(val message: String) : State
     }
 
