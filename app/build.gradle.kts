@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.2.1"
+        versionCode = 5
+        versionName = "0.3.0"
         missingDimensionStrategy("default", "ststable")
         ndk {
             // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
@@ -63,6 +63,8 @@ kotlin {
 
 dependencies {
     implementation(project(":core:youtube-bridge"))
+    implementation(project(":core:player"))
+    implementation(libs.media3.ui)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

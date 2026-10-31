@@ -21,6 +21,7 @@ rootProject.name = "MyTube"
 include(":app")
 include(":core:model")
 include(":core:youtube-bridge")
+include(":core:player")
 
 // YouTube data layer from SmartTube (MIT, git submodules, never edited here).
 // Only :core:youtube-bridge may depend on these.

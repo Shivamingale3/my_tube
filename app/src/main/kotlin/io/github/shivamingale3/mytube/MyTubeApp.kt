@@ -1,7 +1,9 @@
 package io.github.shivamingale3.mytube
 
 import android.app.Application
+import io.github.shivamingale3.mytube.player.PlayerController
 import io.github.shivamingale3.mytube.youtube.YouTubeAccounts
+import io.github.shivamingale3.mytube.youtube.YouTubePlayback
 import io.github.shivamingale3.mytube.youtube.YouTubeSource
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -21,5 +23,8 @@ class MyTubeApp : Application() {
 private val appModule = module {
     single { YouTubeSource(androidContext()) }
     single { YouTubeAccounts(androidContext()) }
+    single { YouTubePlayback(androidContext()) }
+    single { PlayerController(androidContext()) }
     viewModel { DiagnosticsViewModel(get(), get()) }
+    viewModel { PlayerViewModel(get(), get()) }
 }
