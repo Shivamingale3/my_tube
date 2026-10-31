@@ -10,12 +10,34 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import android.os.Looper
+import kotlinx.coroutines.runBlocking
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.robolectric.Shadows.shadowOf
 
-/** Live probe against YouTube: which feeds return videos while signed out. */
+/**
+ * Live probe against YouTube: which feeds return videos while signed out, and what our bridge
+ * builds from them. Skipped unless run with `./gradlew :core:youtube-bridge:testDebugUnitTest -PliveProbe`.
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class HomeFeedProbe {
+    @Before
+    fun onlyWhenAsked() {
+        assumeTrue("live probe disabled", System.getProperty("mytube.liveProbe") == "true")
+    }
+
+    @Test
+    fun probeBridgeHome() {
+        val source = YouTubeSource(RuntimeEnvironment.getApplication())
+        val feed = pumpUntilDone { runBlocking { source.home() } }
+        println("PROBE bridge home personalized=${feed.personalized} rows=${feed.rows.size}")
+        feed.rows.forEach { println("PROBE   row '${it.title}' videos=${it.videos.size}") }
+    }
+
     @Test
     fun probeSignedOutFeeds() {
         GlobalPreferences.instance(RuntimeEnvironment.getApplication())
@@ -45,6 +67,17 @@ class HomeFeedProbe {
         error?.let { throw it }
         if (!done) println("PROBE $name (timed out, partial)")
         result
+    }
+
+    /** Runs [block] off the main thread while pumping the main looper, which RxHelper delivers on. */
+    private fun <T> pumpUntilDone(block: () -> T): T {
+        val future = Executors.newSingleThreadExecutor().submit(Callable(block))
+        val deadline = System.currentTimeMillis() + 120_000
+        while (!future.isDone && System.currentTimeMillis() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(50)
+        }
+        return future.get(1, TimeUnit.SECONDS)
     }
 
     private fun report(name: String, load: () -> List<MediaGroup?>?) {

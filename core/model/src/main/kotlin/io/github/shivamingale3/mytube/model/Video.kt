@@ -20,3 +20,12 @@ data class VideoRow(
     val title: String,
     val videos: List<Video>,
 )
+
+/**
+ * The Home screen's rows. [personalized] is false when no account is signed in: YouTube no
+ * longer serves a signed-out home feed, so the rows come from sections that still work.
+ */
+data class HomeFeed(
+    val rows: List<VideoRow>,
+    val personalized: Boolean,
+)

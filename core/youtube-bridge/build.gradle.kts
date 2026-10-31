@@ -15,6 +15,10 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // Live probes hit YouTube; run them only with -PliveProbe.
+            it.systemProperty("mytube.liveProbe", project.hasProperty("liveProbe").toString())
+        }
     }
 
     compileOptions {

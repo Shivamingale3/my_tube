@@ -12,12 +12,12 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
         missingDimensionStrategy("default", "ststable")
         ndk {
-            // One APK for both 32-bit and 64-bit Android TV userspace.
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
+            abiFilters += listOf("armeabi-v7a")
         }
     }
 

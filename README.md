@@ -26,6 +26,12 @@ cd my_tube
 
 Needs JDK 17+ and the Android SDK (platform 36).
 
+To check what YouTube currently returns for each feed (hits the network, so it's opt-in):
+
+```bash
+./gradlew :core:youtube-bridge:testDebugUnitTest -PliveProbe -i | grep PROBE
+```
+
 ## Layout
 
 | Path | What it is |
