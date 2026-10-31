@@ -1,0 +1,6 @@
+[submodule "external/MediaServiceCore"]
+	path = external/MediaServiceCore
+	url = https://github.com/yuliskov/MediaServiceCore
+[submodule "external/SharedModules"]
+	path = external/SharedModules
+	url = https://github.com/yuliskov/SharedModules
