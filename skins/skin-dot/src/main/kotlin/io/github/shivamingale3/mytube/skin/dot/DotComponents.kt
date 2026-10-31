@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -52,6 +54,7 @@ internal fun DotFocusable(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     radius: Dp = 18.dp,
+    focusedScale: Float = 1f,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -68,7 +71,7 @@ internal fun DotFocusable(
             pressedContainerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f, pressedScale = 0.98f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale, pressedScale = 0.98f),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(BorderStroke(2.dp, DotColors.Focus), shape = shape),
         ),
@@ -79,19 +82,60 @@ internal fun DotFocusable(
     }
 }
 
+/** How thumbnails look when not focused. Under review: the grey look didn't work on a real TV. */
+internal enum class ThumbStyle { Grey, Lift, Dim, Halftone }
+
+internal val LocalThumbStyle = staticCompositionLocalOf { ThumbStyle.Grey }
+
 @Composable
-internal fun DotThumbnail(url: String?, inColor: Boolean, modifier: Modifier = Modifier, radius: Dp = 18.dp) {
-    AsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        colorFilter = if (inColor) null else GreyFilter,
-        modifier = modifier.clip(RoundedCornerShape(radius)).background(DotColors.Surface),
-    )
+internal fun DotThumbnail(url: String?, focused: Boolean, modifier: Modifier = Modifier, radius: Dp = 18.dp) {
+    val style = LocalThumbStyle.current
+    val shape = RoundedCornerShape(radius)
+    Box(modifier.clip(shape).background(DotColors.Surface)) {
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            colorFilter = if (style == ThumbStyle.Grey && !focused) GreyFilter else null,
+            modifier = Modifier.matchParentSize(),
+        )
+        if (!focused) {
+            when (style) {
+                ThumbStyle.Dim -> Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.6f)))
+                ThumbStyle.Halftone -> Box(Modifier.matchParentSize().halftone())
+                else -> Unit
+            }
+        }
+    }
+}
+
+/** A fine screen of dark dots over the image, like a dot-matrix display; cleared on focus. */
+@Composable
+private fun Modifier.halftone(): Modifier {
+    val density = LocalDensity.current
+    val brush = remember(density) {
+        val step = with(density) { 4.dp.toPx() }.coerceAtLeast(3f)
+        val size = step.toInt().coerceAtLeast(3)
+        val tile = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(tile)
+        canvas.drawColor(android.graphics.Color.argb(150, 0, 0, 0))
+        val clear = android.graphics.Paint().apply {
+            isAntiAlias = true
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        }
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.36f, clear)
+        ShaderBrush(ImageShader(tile.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
+    }
+    return background(brush)
 }
 
 @Composable
-internal fun DotAvatar(url: String?, size: Dp, modifier: Modifier = Modifier, inColor: Boolean = false) {
+internal fun DotAvatar(
+    url: String?,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    inColor: Boolean = LocalThumbStyle.current != ThumbStyle.Grey,
+) {
     AsyncImage(
         model = url,
         contentDescription = null,

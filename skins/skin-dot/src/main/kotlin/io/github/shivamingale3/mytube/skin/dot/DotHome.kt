@@ -74,7 +74,7 @@ private fun TopCards(state: HomeUiState, actions: HomeActions) {
 @Composable
 private fun Featured(video: Video, onPlay: () -> Unit) {
     DotFocusable(onClick = onPlay, radius = 28.dp, modifier = Modifier.size(760.dp, 360.dp)) { _ ->
-        DotThumbnail(video.thumbnailUrl, inColor = true, radius = 28.dp, modifier = Modifier.fillMaxSize())
+        DotThumbnail(video.thumbnailUrl, focused = true, radius = 28.dp, modifier = Modifier.fillMaxSize())
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(0.4f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.9f)),
@@ -129,7 +129,7 @@ private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
                 )
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    DotThumbnail(video.thumbnailUrl, inColor = false, radius = 12.dp, modifier = Modifier.size(128.dp, 72.dp))
+                    DotThumbnail(video.thumbnailUrl, focused = false, radius = 12.dp, modifier = Modifier.size(128.dp, 72.dp))
                     Text(video.title, style = DotType.Title, color = DotColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -198,18 +198,25 @@ private fun VideoRowSection(row: VideoRow, label: String, onPlay: (Video) -> Uni
 
 @Composable
 private fun VideoCard(video: Video, onPlay: () -> Unit) {
-    DotFocusable(onClick = onPlay, radius = 18.dp) { focused ->
-        Column(Modifier.width(224.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            DotThumbnail(video.thumbnailUrl, inColor = focused, modifier = Modifier.size(224.dp, 126.dp))
-            Text(
-                video.title,
-                style = DotType.Card,
-                color = if (focused) DotColors.Text else DotColors.TextDim,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-        }
+    val lift = if (LocalThumbStyle.current == ThumbStyle.Lift) 1.06f else 1f
+    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = lift) { focused -> VideoCardContent(video, focused) }
+}
+
+@Composable
+internal fun VideoCardContent(video: Video, focused: Boolean) {
+    Column(
+        Modifier.width(224.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        DotThumbnail(video.thumbnailUrl, focused = focused, modifier = Modifier.size(224.dp, 126.dp))
+        Text(
+            video.title,
+            style = DotType.Card,
+            color = if (focused) DotColors.Text else DotColors.TextDim,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
     }
 }
 

@@ -2,7 +2,20 @@ package io.github.shivamingale3.mytube.skin.dot
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Text
 import androidx.compose.ui.test.onRoot
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -75,6 +88,45 @@ class DotPreviewTest {
             }
         }
         compose.onRoot().captureRoboImage("build/previews/dot-home.png")
+    }
+
+    /** Side-by-side comparison of the unfocused thumbnail styles; the second card in each strip is focused. */
+    @Test
+    fun thumbnailStyles() {
+        val cards = sampleHome.rows.first().videos.take(4)
+        compose.setContent {
+            DesignScale {
+                DotSkin.Theme {
+                    Column(
+                        Modifier.fillMaxSize().dotGrid().padding(horizontal = 48.dp, vertical = 40.dp),
+                        verticalArrangement = Arrangement.spacedBy(22.dp),
+                    ) {
+                        listOf(
+                            ThumbStyle.Lift to "A · FULL COLOUR · FOCUSED CARD LIFTS",
+                            ThumbStyle.Dim to "B · DIMMED · FOCUSED CARD LIGHTS UP",
+                            ThumbStyle.Halftone to "C · DOT-SCREEN OVERLAY · CLEARS ON FOCUS",
+                        ).forEach { (style, label) ->
+                            CompositionLocalProvider(LocalThumbStyle provides style) {
+                                Text(label, style = DotType.Label, color = DotColors.TextMuted)
+                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    cards.forEachIndexed { i, video ->
+                                        val focus = if (i == 1) {
+                                            val lift = if (style == ThumbStyle.Lift) 1.06f else 1f
+                                            Modifier.graphicsLayer { scaleX = lift; scaleY = lift }
+                                                .border(2.dp, DotColors.Focus, RoundedCornerShape(18.dp))
+                                        } else Modifier
+                                        Box(focus) {
+                                            VideoCardContent(video, focused = i == 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.onRoot().captureRoboImage("build/previews/dot-thumbnail-styles.png")
     }
 
     private val sampleAccount = UserAccount(1, "Shivam", null, null, isSelected = true)

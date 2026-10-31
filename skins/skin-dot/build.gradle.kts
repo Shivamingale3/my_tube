@@ -49,5 +49,6 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.coil.test)
     testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.tv.material)
     debugImplementation(libs.compose.ui.test.manifest)
 }
