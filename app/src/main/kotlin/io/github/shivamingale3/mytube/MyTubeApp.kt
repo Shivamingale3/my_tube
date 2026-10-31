@@ -7,10 +7,12 @@ import coil3.SingletonImageLoader
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
 import io.github.shivamingale3.mytube.screens.HomeViewModel
+import io.github.shivamingale3.mytube.screens.PlayerViewModel
 import io.github.shivamingale3.mytube.player.PlayerController
 import io.github.shivamingale3.mytube.youtube.YouTubeAccounts
 import io.github.shivamingale3.mytube.youtube.YouTubePlayback
 import io.github.shivamingale3.mytube.youtube.YouTubeSource
+import io.github.shivamingale3.mytube.youtube.warmUpYouTube
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.core.module.dsl.viewModel
@@ -23,6 +25,8 @@ class MyTubeApp : Application(), SingletonImageLoader.Factory {
             androidContext(this@MyTubeApp)
             modules(appModule)
         }
+        // Start YouTube's one-time setup now, behind the splash screen, not on the first play.
+        warmUpYouTube(this)
     }
 
     // Images load over Ktor rather than OkHttp: SmartTube's code pins OkHttp 3, which Coil can't use.
@@ -40,6 +44,6 @@ private val appModule = module {
     single { PlayerController(androidContext()) }
     viewModel { DiagnosticsViewModel(get(), get()) }
     viewModel { ShellViewModel(get()) }
-    viewModel { HomeViewModel(get()) }
+    viewModel { HomeViewModel(get(), get()) }
     viewModel { PlayerViewModel(get(), get()) }
 }

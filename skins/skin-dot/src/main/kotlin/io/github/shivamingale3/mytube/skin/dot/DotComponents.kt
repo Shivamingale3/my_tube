@@ -1,5 +1,10 @@
 package io.github.shivamingale3.mytube.skin.dot
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,13 +24,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -34,14 +38,6 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import coil3.compose.AsyncImage
-
-/** Thumbnails stay grey until focused; Dot's signature move. */
-private val GreyFilter = ColorFilter.colorMatrix(
-    ColorMatrix().apply {
-        setToSaturation(0f)
-        timesAssign(ColorMatrix(floatArrayOf(0.8f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0f, 0f, 0f, 0f, 0f, 0.8f, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
-    },
-)
 
 /**
  * A focusable, clickable area with Dot's focus treatment: a thin white ring, no scaling or glow.
@@ -52,6 +48,7 @@ internal fun DotFocusable(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     radius: Dp = 18.dp,
+    focusedScale: Float = 1f,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -68,7 +65,7 @@ internal fun DotFocusable(
             pressedContainerColor = Color.Transparent,
             disabledContainerColor = Color.Transparent,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f, pressedScale = 0.98f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale, pressedScale = 0.98f),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(BorderStroke(2.dp, DotColors.Focus), shape = shape),
         ),
@@ -79,24 +76,49 @@ internal fun DotFocusable(
     }
 }
 
+/** Card lift on focus; together with the white ring it marks the focused card. */
+internal const val CardFocusScale = 1.06f
+
+/** A thumbnail under a fine dot screen, like a dot-matrix display; the screen clears on focus. */
 @Composable
-internal fun DotThumbnail(url: String?, inColor: Boolean, modifier: Modifier = Modifier, radius: Dp = 18.dp) {
-    AsyncImage(
-        model = url,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        colorFilter = if (inColor) null else GreyFilter,
-        modifier = modifier.clip(RoundedCornerShape(radius)).background(DotColors.Surface),
-    )
+internal fun DotThumbnail(url: String?, focused: Boolean, modifier: Modifier = Modifier, radius: Dp = 18.dp) {
+    Box(modifier.clip(RoundedCornerShape(radius)).background(DotColors.Surface)) {
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.matchParentSize(),
+        )
+        if (!focused) Box(Modifier.matchParentSize().halftoneScreen())
+    }
+}
+
+/** Dark overlay with round holes in a 4 dp grid, so the image shows through as dots. */
+@Composable
+internal fun Modifier.halftoneScreen(): Modifier {
+    val density = LocalDensity.current
+    val brush = remember(density) {
+        val step = with(density) { 4.dp.toPx() }.coerceAtLeast(3f)
+        val size = step.toInt().coerceAtLeast(3)
+        val tile = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(tile)
+        canvas.drawColor(android.graphics.Color.argb(150, 0, 0, 0))
+        val clear = android.graphics.Paint().apply {
+            isAntiAlias = true
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        }
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.36f, clear)
+        ShaderBrush(ImageShader(tile.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
+    }
+    return background(brush)
 }
 
 @Composable
-internal fun DotAvatar(url: String?, size: Dp, modifier: Modifier = Modifier, inColor: Boolean = false) {
+internal fun DotAvatar(url: String?, size: Dp, modifier: Modifier = Modifier) {
     AsyncImage(
         model = url,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        colorFilter = if (inColor) null else GreyFilter,
         modifier = modifier.size(size).clip(CircleShape).background(DotColors.Track),
     )
 }
@@ -112,6 +134,23 @@ internal fun PlayGlyph(modifier: Modifier = Modifier, color: Color = DotColors.T
             close()
         }
         drawPath(path, color)
+    }
+}
+
+/** Five dots with a red one sweeping across: Dot's loading indicator. */
+@Composable
+internal fun DotLoader(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "loader")
+    val step by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 5f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing)),
+        label = "step",
+    )
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(5) { i ->
+            Box(Modifier.size(10.dp).background(if (i == step.toInt() % 5) DotColors.Accent else Color(0xFF3A3A3A), CircleShape))
+        }
     }
 }
 

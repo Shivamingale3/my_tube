@@ -9,6 +9,15 @@ data class PlaybackInfo(
     val source: StreamSource,
     /** Stream hosts expect requests with the same client identity the streams were issued to. */
     val userAgent: String,
+    /** Caption tracks YouTube offers, loaded alongside the video; none is shown until picked. */
+    val captions: List<CaptionTrack> = emptyList(),
+)
+
+data class CaptionTrack(
+    val url: String,
+    val languageCode: String?,
+    val label: String,
+    val mimeType: String,
 )
 
 /** Where the player reads the audio and video from. */
@@ -28,3 +37,11 @@ sealed interface StreamSource {
 
 /** YouTube refused or could not provide a playable stream; [reason] is shown to the user. */
 class PlaybackUnavailableException(val reason: String) : Exception(reason)
+
+/** A community-marked part of a video (SponsorBlock), e.g. a sponsor read. */
+data class SponsorSegment(
+    val startMs: Long,
+    val endMs: Long,
+    /** SponsorBlock category: "sponsor", "selfpromo", "intro", "outro", "interaction", … */
+    val category: String,
+)

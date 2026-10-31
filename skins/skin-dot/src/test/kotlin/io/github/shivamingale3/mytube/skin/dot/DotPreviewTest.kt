@@ -2,7 +2,22 @@ package io.github.shivamingale3.mytube.skin.dot
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.test.isFocusable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Text
 import androidx.compose.ui.test.onRoot
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
@@ -13,6 +28,10 @@ import coil3.request.SuccessResult
 import coil3.test.FakeImageLoaderEngine
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.shivamingale3.mytube.model.ChannelSummary
+import io.github.shivamingale3.mytube.model.SponsorSegment
+import io.github.shivamingale3.mytube.player.VideoQuality
+import io.github.shivamingale3.mytube.screens.PlayerUiState
+import io.github.shivamingale3.mytube.skin.PlayerActions
 import io.github.shivamingale3.mytube.model.UserAccount
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.model.VideoRow
@@ -75,6 +94,83 @@ class DotPreviewTest {
             }
         }
         compose.onRoot().captureRoboImage("build/previews/dot-home.png")
+    }
+
+    @Test
+    fun homeWithFocus() {
+        compose.setContent {
+            DesignScale {
+                DotSkin.Theme {
+                    DotSkin.Shell(ShellState(Tab.Home, sampleAccount), ShellActions({}, {})) {
+                        DotSkin.Home(sampleHome, HomeActions({}, {}, {}))
+                    }
+                }
+            }
+        }
+        // Focus the second card of the first row: it should lift, clear its dot screen and get the ring.
+        compose.onAllNodes(isFocusable())[9].requestFocus()
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/previews/dot-home-focused.png")
+    }
+
+    private fun playerState(phase: PlayerUiState.Phase) = PlayerUiState(
+        video = sampleHome.featured,
+        phase = phase,
+        title = "The Insane Engineering of Fiber Optics",
+        channelName = "Veritasium",
+        positionMs = 754_000,
+        durationMs = 2_072_000,
+        isPlaying = true,
+        segments = listOf(SponsorSegment(900_000, 1_010_000, "sponsor")),
+        qualities = listOf(VideoQuality(2160, 30), VideoQuality(1440, 30), VideoQuality(1080, 60), VideoQuality(720, 30)),
+        playingHeight = 2160,
+        speed = 1f,
+    )
+
+    private fun renderPlayer(state: PlayerUiState, name: String) {
+        compose.setContent {
+            DesignScale {
+                DotSkin.Theme {
+                    DotSkin.Player(state, PlayerActions({}, {}, {}, {}, {}, {}, {})) {
+                        coil3.compose.AsyncImage(
+                            model = "t_NiCgcUTL9_Q",
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/previews/$name.png")
+    }
+
+    @Test
+    fun playerControls() = renderPlayer(playerState(PlayerUiState.Phase.Ready), "dot-player")
+
+    @Test
+    fun playerLoading() = renderPlayer(playerState(PlayerUiState.Phase.Resolving).copy(positionMs = 0), "dot-player-loading")
+
+    @Test
+    fun playerSponsor() = renderPlayer(
+        playerState(PlayerUiState.Phase.Ready).let { it.copy(positionMs = 930_000, activeSegment = it.segments.first()) },
+        "dot-player-sponsor",
+    )
+
+    @Test
+    fun qualitySheet() {
+        compose.setContent {
+            DesignScale {
+                DotSkin.Theme {
+                    Box(Modifier.fillMaxSize().dotGrid(), contentAlignment = androidx.compose.ui.Alignment.CenterEnd) {
+                        OptionSheet("QUALITY", listOf("AUTO", "2160P", "1440P", "1080P60", "720P"), selected = 0, onPick = {})
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/previews/dot-quality.png")
     }
 
     private val sampleAccount = UserAccount(1, "Shivam", null, null, isSelected = true)

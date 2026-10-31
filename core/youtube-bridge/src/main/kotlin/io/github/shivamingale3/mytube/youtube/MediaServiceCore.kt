@@ -13,3 +13,11 @@ internal object MediaServiceCore {
         return YouTubeServiceManager.instance()
     }
 }
+
+/**
+ * Starts MediaServiceCore's one-time setup (YouTube's player script, the stream decoder) in the
+ * background, as SmartTube does behind its splash screen, so the first video starts sooner.
+ */
+fun warmUpYouTube(context: Context) {
+    MediaServiceCore.services(context).refreshCacheIfNeeded()
+}

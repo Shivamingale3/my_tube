@@ -6,8 +6,10 @@ import io.github.shivamingale3.mytube.model.ChannelSummary
 import io.github.shivamingale3.mytube.model.HomeFeed
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.model.VideoRow
+import io.github.shivamingale3.mytube.youtube.YouTubePlayback
 import io.github.shivamingale3.mytube.youtube.YouTubeSource
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,12 +34,16 @@ data class HomeUiState(
     val newUploadCount: Int get() = channels.count { it.hasNewContent }
 }
 
-class HomeViewModel(private val youTube: YouTubeSource) : ViewModel() {
+class HomeViewModel(
+    private val youTube: YouTubeSource,
+    private val playback: YouTubePlayback,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeUiState())
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
 
     private var loadJob: Job? = null
+    private var focusJob: Job? = null
 
     init {
         refresh()
@@ -55,11 +61,21 @@ class HomeViewModel(private val youTube: YouTubeSource) : ViewModel() {
             launch {
                 val watched = youTube.history().firstOrNull { it.percentWatched in 1..95 }
                 _state.update { it.copy(continueWatching = watched) }
+                watched?.let { playback.prefetch(it.id) }
             }
             launch {
                 val channels = youTube.subscribedChannels()
                 _state.update { it.copy(channels = channels) }
             }
+        }
+    }
+
+    /** A card got focus; if it stays focused for a moment, start resolving its streams. */
+    fun onFocus(video: Video) {
+        focusJob?.cancel()
+        focusJob = viewModelScope.launch {
+            delay(FOCUS_PREFETCH_DELAY_MS)
+            playback.prefetch(video.id)
         }
     }
 
@@ -70,6 +86,11 @@ class HomeViewModel(private val youTube: YouTubeSource) : ViewModel() {
             firstRow?.let { row -> add(row.copy(videos = row.videos - setOfNotNull(featured))) }
             addAll(feed.rows.drop(1))
         }.filter { it.videos.isNotEmpty() }
+        if (featured != null && featured != this.featured) playback.prefetch(featured.id)
         return copy(loading = false, error = null, personalized = feed.personalized, featured = featured, rows = rest)
+    }
+
+    private companion object {
+        const val FOCUS_PREFETCH_DELAY_MS = 800L
     }
 }
