@@ -4,8 +4,6 @@ import android.content.Context
 import com.liskovsoft.mediaserviceinterfaces.ContentService
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem
-import com.liskovsoft.sharedutils.prefs.GlobalPreferences
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager
 import io.github.shivamingale3.mytube.model.HomeFeed
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.model.VideoRow
@@ -23,12 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * our own model types, so the data layer underneath can be swapped or updated in one place.
  */
 class YouTubeSource(context: Context) {
-    init {
-        // MediaServiceCore reads its settings and caches through this context-backed singleton.
-        GlobalPreferences.instance(context.applicationContext)
-    }
-
-    private val content: ContentService by lazy { YouTubeServiceManager.instance().contentService }
+    private val content: ContentService by lazy { MediaServiceCore.services(context).contentService }
 
     /**
      * The signed-in home feed, or, when YouTube returns nothing (no account), rows built from
