@@ -65,6 +65,19 @@ class YouTubeSource(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /** Videos matching [query]; channels and playlists in the results are left out. */
+    suspend fun search(query: String): List<Video> = withContext(Dispatchers.IO) {
+        content.getSearch(query).orEmpty()
+            .flatMap { it.mediaItems.orEmpty() }
+            .mapNotNull { it.toVideo() }
+            .distinctBy { it.id }
+    }
+
+    /** YouTube's completions for a partly typed query. Empty when there are none or the lookup fails. */
+    suspend fun searchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
+        runCatching { content.getSearchTags(query).orEmpty().filter { it.isNotBlank() }.take(MAX_SUGGESTIONS) }.getOrDefault(emptyList())
+    }
+
     private suspend fun signedOutRows(): List<VideoRow> = coroutineScope {
         val sections = listOf(
             "Live" to { content.liveObserve },
@@ -88,6 +101,7 @@ class YouTubeSource(context: Context) {
     private companion object {
         const val FEED_TIMEOUT_MS = 30_000L
         const val MAX_HOME_ROWS = 40
+        const val MAX_SUGGESTIONS = 6
     }
 }
 

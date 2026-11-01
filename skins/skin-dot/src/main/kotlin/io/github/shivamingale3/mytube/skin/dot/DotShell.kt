@@ -24,7 +24,7 @@ import io.github.shivamingale3.mytube.skin.ShellActions
 import io.github.shivamingale3.mytube.skin.ShellState
 import io.github.shivamingale3.mytube.skin.Tab
 
-/** Dot's frame: dot-matrix wordmark, mono tab labels with a red dot on the current one, account circle. */
+/** Dot's frame: dot-matrix wordmark, mono tab labels with an accent dot on the current one, profile circle (Settings). */
 @Composable
 internal fun DotShell(state: ShellState, actions: ShellActions, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().dotGrid()) {
@@ -37,7 +37,7 @@ internal fun DotShell(state: ShellState, actions: ShellActions, content: @Compos
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Tab.entries.forEach { tab -> NavItem(tab, selected = tab == state.tab) { actions.selectTab(tab) } }
             }
-            AccountCircle(state, actions.openAccount)
+            AccountCircle(state, actions.openSettings)
         }
         Box(Modifier.fillMaxWidth().weight(1f)) { content() }
     }

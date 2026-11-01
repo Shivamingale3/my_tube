@@ -25,6 +25,7 @@ include(":core:player")
 include(":core:screens")
 include(":skins:skin-api")
 include(":skins:skin-dot")
+include(":skins:skin-tonal")
 
 // YouTube data layer from SmartTube (MIT, git submodules, never edited here).
 // Only :core:youtube-bridge may depend on these.
