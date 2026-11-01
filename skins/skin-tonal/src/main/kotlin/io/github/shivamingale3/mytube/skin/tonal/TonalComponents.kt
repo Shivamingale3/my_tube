@@ -149,8 +149,8 @@ internal fun TonalAvatar(url: String?, size: Dp, modifier: Modifier = Modifier) 
 
 /** A video card: rounded thumbnail with a duration badge and a one-line title. */
 @Composable
-internal fun TonalVideoCard(video: Video, width: Dp, onFocus: () -> Unit, onPlay: () -> Unit) {
-    TonalFocusable(onClick = onPlay, radius = 20.dp, focusedScale = 1.05f) { focused ->
+internal fun TonalVideoCard(video: Video, width: Dp, onFocus: () -> Unit, modifier: Modifier = Modifier, onPlay: () -> Unit) {
+    TonalFocusable(onClick = onPlay, radius = 20.dp, focusedScale = 1.05f, modifier = modifier) { focused ->
         if (focused) LaunchedEffect(video.id) { onFocus() }
         Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {

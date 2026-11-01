@@ -210,8 +210,8 @@ private fun VideoRowSection(row: VideoRow, label: String, onFocus: (Video) -> Un
 }
 
 @Composable
-internal fun VideoCard(video: Video, onFocus: () -> Unit, width: Dp = RowCardWidth, onPlay: () -> Unit) {
-    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale) { focused ->
+internal fun VideoCard(video: Video, onFocus: () -> Unit, width: Dp = RowCardWidth, modifier: Modifier = Modifier, onPlay: () -> Unit) {
+    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale, modifier = modifier) { focused ->
         if (focused) LaunchedEffect(video.id) { onFocus() }
         VideoCardContent(video, focused, width)
     }

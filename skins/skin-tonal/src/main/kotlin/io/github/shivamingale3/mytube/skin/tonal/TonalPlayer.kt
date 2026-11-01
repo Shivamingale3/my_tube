@@ -57,6 +57,7 @@ import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.screens.PlayerUiState.Phase
 import io.github.shivamingale3.mytube.skin.PlayerActions
 import io.github.shivamingale3.mytube.skin.Scrubber
+import io.github.shivamingale3.mytube.skin.UpNextShelf
 import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,10 +78,12 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
     var inputCount by remember { mutableIntStateOf(0) }
     val rootFocus = remember { FocusRequester() }
     val scrubber = remember { Scrubber() }
+    val shelf = remember { UpNextShelf() }
+    val ended = state.phase == Phase.Ended
     val started = state.phase == Phase.Ready || state.phase == Phase.Ended || (state.phase == Phase.Buffering && state.positionMs > 0)
 
     LaunchedEffect(inputCount, controlsVisible, sheet, state.isPlaying) {
-        if (controlsVisible && sheet == null && state.isPlaying) {
+        if (controlsVisible && sheet == null && !shelf.open && state.isPlaying) {
             delay(HIDE_AFTER_MS)
             controlsVisible = false
         }
@@ -88,7 +91,8 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
     // Controls hiding or a sheet opening ends a seek in progress.
     LaunchedEffect(controlsVisible, sheet) { if (!controlsVisible || sheet != null) scrubber.commit(actions.seekTo) }
     LaunchedEffect(sheet == Sheet.Stats) { actions.showStats(sheet == Sheet.Stats) }
-    LaunchedEffect(controlsVisible, started) { if (!controlsVisible || !started) runCatching { rootFocus.requestFocus() } }
+    LaunchedEffect(controlsVisible) { if (!controlsVisible) shelf.open = false }
+    LaunchedEffect(controlsVisible, started) { if (!ended && (!controlsVisible || !started)) runCatching { rootFocus.requestFocus() } }
 
     Box(
         Modifier.fillMaxSize().background(TonalColors.Background)
@@ -96,7 +100,7 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
             .focusable()
             .onPreviewKeyEvent { event ->
                 val seekKey = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
-                if (seekKey && started && !state.isLive && sheet == null) {
+                if (seekKey && started && !ended && !state.isLive && sheet == null) {
                     if (event.type == KeyEventType.KeyUp && scrubber.pendingMs != null) {
                         scrubber.commit(actions.seekTo)
                         return@onPreviewKeyEvent true
@@ -111,8 +115,13 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 inputCount++
                 when {
+                    event.key == Key.DirectionDown && controlsVisible && sheet == null && !shelf.open && shelf.buttonsFocused && state.related.isNotEmpty() -> {
+                        shelf.open = true
+                        true
+                    }
                     event.key == Key.Back -> when {
                         sheet != null -> { sheet = null; true }
+                        shelf.open -> { shelf.open = false; true }
                         controlsVisible && started && state.isPlaying -> { controlsVisible = false; true }
                         else -> false
                     }
@@ -121,7 +130,7 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
                     }
                     event.key == Key.MediaFastForward -> { actions.seekBy(SEEK_STEP_MS); true }
                     event.key == Key.MediaRewind -> { actions.seekBy(-SEEK_STEP_MS); true }
-                    !controlsVisible && started -> {
+                    !controlsVisible && started && !ended -> {
                         when (event.key) {
                             Key.DirectionLeft -> actions.seekBy(-SEEK_STEP_MS)
                             Key.DirectionRight -> actions.seekBy(SEEK_STEP_MS)
@@ -140,9 +149,10 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
         when {
             state.phase == Phase.Failed -> ErrorLayer(state, actions)
             !started -> LoadingLayer(state)
+            ended -> TonalEndScreen(state, actions)
             else -> {
                 AnimatedVisibility(controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    ControlsLayer(state, actions, scrubber, onOpen = { sheet = it })
+                    ControlsLayer(state, actions, scrubber, shelf, onOpen = { sheet = it })
                 }
                 if (state.phase == Phase.Buffering) TonalLoader(Modifier.align(Alignment.Center))
             }
@@ -217,7 +227,7 @@ private fun BoxScope.ErrorLayer(state: PlayerUiState, actions: PlayerActions) {
 }
 
 @Composable
-private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, onOpen: (Sheet) -> Unit) {
+private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, shelf: UpNextShelf, onOpen: (Sheet) -> Unit) {
     // While seeking, everything shows the target position.
     val state = live.copy(positionMs = scrubber.pendingMs ?: live.positionMs)
     val barFocus = remember { FocusRequester() }
@@ -261,7 +271,7 @@ private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber:
                     Text(formatDuration(state.durationMs), style = TonalType.Chip, color = TonalColors.Muted)
                 }
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().onFocusChanged { shelf.buttonsFocused = it.hasFocus }, verticalAlignment = Alignment.CenterVertically) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!state.isLive) RoundIcon(Icon.Back10) { actions.seekBy(-SEEK_STEP_MS) }
                     TonalFocusable(onClick = actions.togglePlay, radius = 20.dp, modifier = Modifier.focusRequester(playFocus)) { _ ->
@@ -277,6 +287,11 @@ private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber:
                     TonalChip(if (state.caption != null) "Captions on" else "Captions", onClick = { onOpen(Sheet.Captions) }, enabled = state.captions.isNotEmpty())
                     if (state.showStatsButton) TonalChip("Stats", onClick = { onOpen(Sheet.Stats) })
                 }
+            }
+            if (shelf.open) {
+                TonalUpNextRow(state, actions)
+            } else if (state.related.isNotEmpty()) {
+                Text("Press ↓ for Up next", style = TonalType.Meta, color = TonalColors.Dim)
             }
         }
     }

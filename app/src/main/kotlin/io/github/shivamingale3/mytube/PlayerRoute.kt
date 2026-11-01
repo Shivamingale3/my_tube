@@ -65,6 +65,8 @@ fun PlayerRoute(video: Video, skin: Skin, onBack: () -> Unit, viewModel: PlayerV
         setSpeed = viewModel::setSpeed,
         retry = viewModel::retry,
         showStats = viewModel::showStats,
+        play = viewModel::open,
+        replay = viewModel::replay,
     )
     DesignScale {
         skin.Player(state, actions) {

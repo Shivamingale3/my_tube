@@ -99,6 +99,10 @@ class SkinPreviewTest {
     @Test fun tonalSkeleton() = render("tonal-skeleton", TonalSkin) { shell(TonalSkin, Tab.Home) { TonalSkin.Home(HomeUiState(), HomeActions({}, {})) } }
     @Test fun dotSkeleton() = render("dot-skeleton", DotSkin) { shell(DotSkin, Tab.Home) { DotSkin.Home(HomeUiState(), HomeActions({}, {})) } }
 
+    private val ended get() = player.copy(phase = PlayerUiState.Phase.Ended, isPlaying = false, upNext = videos[5], related = videos + videos.map { it.copy(id = it.id + "2") }, countdown = 7)
+    @Test fun tonalEnd() = render("tonal-end", TonalSkin) { TonalSkin.Player(ended, playerActions) { thumbnail() } }
+    @Test fun dotEnd() = render("dot-end", DotSkin) { DotSkin.Player(ended, playerActions) { thumbnail() } }
+
     @Composable
     private fun thumbnail() = coil3.compose.AsyncImage(
         model = "t_ESABTN4VtrA",

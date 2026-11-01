@@ -29,3 +29,9 @@ data class HomeFeed(
     val rows: List<VideoRow>,
     val personalized: Boolean,
 )
+
+/** YouTube's suggestions for after a video: the one it would autoplay, and related videos. */
+data class Related(
+    val next: Video? = null,
+    val videos: List<Video> = emptyList(),
+)
