@@ -12,9 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,13 +39,16 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.screens.SearchUiState
+import io.github.shivamingale3.mytube.skin.LocalFocusRestore
 import io.github.shivamingale3.mytube.skin.SearchActions
+import io.github.shivamingale3.mytube.skin.restoreFocus
 
-/** Tonal's Search: a pill search field with a mic, suggestion chips, results in two columns. */
+/** Tonal's Search: a pill search field with a mic, suggestion chips, then one column of large results. */
 @Composable
 internal fun TonalSearch(state: SearchUiState, actions: SearchActions) {
     val field = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
+    val restoring = LocalFocusRestore.current.videoId != null
+    LaunchedEffect(Unit) { if (!restoring) runCatching { field.requestFocus() } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 64.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         SearchField(state, actions, field)
@@ -63,11 +64,9 @@ internal fun TonalSearch(state: SearchUiState, actions: SearchActions) {
                 state.error != null -> Note("Can't search", state.error.orEmpty())
                 state.searched != null && state.results.isEmpty() -> Note("No results", "Try other words.")
                 state.searched == null -> Note("Search YouTube", "Type with the remote's keyboard, or press the mic and speak.")
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                else -> LazyColumn(
                     contentPadding = PaddingValues(top = 4.dp, bottom = 48.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(state.results, key = { it.id }) { video -> ResultRow(video, actions) }
                 }
@@ -112,30 +111,35 @@ private fun SearchField(state: SearchUiState, actions: SearchActions, focus: Foc
 
 @Composable
 private fun ResultRow(video: Video, actions: SearchActions) {
-    TonalFocusable(onClick = { actions.play(video) }, radius = 24.dp, modifier = Modifier.fillMaxWidth()) { focused ->
+    TonalFocusable(onClick = { actions.play(video) }, radius = 28.dp, modifier = Modifier.fillMaxWidth().restoreFocus(video.id)) { focused ->
         if (focused) LaunchedEffect(video.id) { actions.focus(video) }
         Row(
-            Modifier.fillMaxWidth().background(if (focused) TonalColors.Chip else Color.Transparent, RoundedCornerShape(24.dp)).padding(12.dp),
+            Modifier.fillMaxWidth().background(if (focused) TonalColors.Chip else Color.Transparent, RoundedCornerShape(28.dp)).padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
             Box {
-                TonalThumbnail(video.thumbnailUrl, Modifier.size(216.dp, 122.dp), radius = 16.dp)
+                TonalThumbnail(video.thumbnailUrl, Modifier.size(400.dp, 225.dp), radius = 20.dp)
                 video.badge()?.let {
                     Text(
                         it,
-                        style = TonalType.Meta.copy(fontFamily = TonalFonts.Display),
+                        style = TonalType.Chip,
                         color = Color.White,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
-                            .background(if (video.isLive) TonalColors.Accent else Color.Black.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp)
+                            .background(if (video.isLive) TonalColors.Accent else Color.Black.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                 }
+                if (video.percentWatched in 1..100) {
+                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.3f))) {
+                        Box(Modifier.fillMaxWidth(video.percentWatched / 100f).height(4.dp).background(TonalColors.Accent))
+                    }
+                }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(video.title, style = TonalType.Title, color = TonalColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                video.channelName?.let { Text(it, style = TonalType.Body.copy(fontSize = 14.sp), color = TonalColors.Muted, maxLines = 1) }
-                video.subtitle?.let { Text(it, style = TonalType.Meta, color = TonalColors.Dim, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(video.title, style = TonalType.Hero.copy(fontSize = 26.sp, lineHeight = 32.sp), color = TonalColors.Text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                video.channelName?.let { Text(it, style = TonalType.Body.copy(fontSize = 17.sp), color = TonalColors.Muted, maxLines = 1) }
+                video.subtitle?.let { Text(it, style = TonalType.Body, color = TonalColors.Dim, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
         }
     }

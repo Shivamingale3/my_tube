@@ -39,6 +39,7 @@ import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.model.VideoRow
 import io.github.shivamingale3.mytube.screens.HomeUiState
 import io.github.shivamingale3.mytube.skin.HomeActions
+import io.github.shivamingale3.mytube.skin.restoreFocus
 
 private val HeroShape = RoundedCornerShape(32.dp)
 
@@ -97,7 +98,7 @@ private fun Hero(video: Video, actions: HomeActions) {
                 }
                 video.subtitle?.let { Text(it, style = TonalType.Body, color = TonalColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
-            TonalButton("Watch", onClick = { actions.play(video) }, primary = true, modifier = Modifier.padding(top = 6.dp), leading = { c ->
+            TonalButton("Watch", onClick = { actions.play(video) }, primary = true, modifier = Modifier.padding(top = 6.dp).restoreFocus(video.id), leading = { c ->
                 TonalIcon(Icon.Play, c, Modifier.size(16.dp))
             })
         }

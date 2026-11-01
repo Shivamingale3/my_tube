@@ -47,6 +47,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import io.github.shivamingale3.mytube.model.Video
+import io.github.shivamingale3.mytube.skin.restoreFocus
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -150,7 +151,7 @@ internal fun TonalAvatar(url: String?, size: Dp, modifier: Modifier = Modifier) 
 /** A video card: rounded thumbnail with a duration badge and a one-line title. */
 @Composable
 internal fun TonalVideoCard(video: Video, width: Dp, onFocus: () -> Unit, modifier: Modifier = Modifier, onPlay: () -> Unit) {
-    TonalFocusable(onClick = onPlay, radius = 20.dp, focusedScale = 1.05f, modifier = modifier) { focused ->
+    TonalFocusable(onClick = onPlay, radius = 20.dp, focusedScale = 1.05f, modifier = modifier.restoreFocus(video.id)) { focused ->
         if (focused) LaunchedEffect(video.id) { onFocus() }
         Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {

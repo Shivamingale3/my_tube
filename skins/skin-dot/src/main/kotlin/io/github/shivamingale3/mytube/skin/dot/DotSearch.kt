@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -31,7 +30,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import io.github.shivamingale3.mytube.screens.SearchUiState
+import io.github.shivamingale3.mytube.model.Video
+import io.github.shivamingale3.mytube.skin.LocalFocusRestore
 import io.github.shivamingale3.mytube.skin.SearchActions
+import io.github.shivamingale3.mytube.skin.restoreFocus
 
 private val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".map { it.toString() }
 
@@ -39,7 +41,8 @@ private val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890".map { it.toString()
 @Composable
 internal fun DotSearch(state: SearchUiState, actions: SearchActions) {
     val firstKey = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
+    val restoring = LocalFocusRestore.current.videoId != null
+    LaunchedEffect(Unit) { if (!restoring) runCatching { firstKey.requestFocus() } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp)) {
         QueryLine(state)
@@ -147,15 +150,11 @@ private fun Results(state: SearchUiState, actions: SearchActions, modifier: Modi
             state.error != null -> Message("CAN'T SEARCH", state.error.orEmpty())
             state.searched != null && state.results.isEmpty() -> Message("NO RESULTS", "Try other words.")
             state.searched == null -> Message("FIND ANYTHING", "Videos from all of YouTube, without ads.")
-            else -> LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
+            else -> LazyColumn(
                 contentPadding = PaddingValues(top = 6.dp, bottom = 48.dp, start = 6.dp, end = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-                verticalArrangement = Arrangement.spacedBy(22.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.results, key = { it.id }) { video ->
-                    VideoCard(video, onFocus = { actions.focus(video) }, width = 240.dp) { actions.play(video) }
-                }
+                items(state.results, key = { it.id }) { video -> ResultRow(video, actions) }
             }
         }
     }
@@ -166,5 +165,35 @@ private fun Message(title: String, body: String) {
     Column(Modifier.padding(top = 40.dp, start = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = DotType.Wordmark, color = DotColors.Text)
         Text(body, style = DotType.Title, color = DotColors.TextMuted)
+    }
+}
+
+/** One large search result: thumbnail, then title, channel and views/date. */
+@Composable
+private fun ResultRow(video: Video, actions: SearchActions) {
+    DotFocusable(onClick = { actions.play(video) }, radius = 22.dp, modifier = Modifier.fillMaxWidth().restoreFocus(video.id)) { focused ->
+        if (focused) LaunchedEffect(video.id) { actions.focus(video) }
+        Row(
+            Modifier.fillMaxWidth().background(if (focused) Color(0xFF141414) else Color.Transparent, RoundedCornerShape(22.dp)).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            Box {
+                DotThumbnail(video.thumbnailUrl, focused = focused, modifier = Modifier.size(320.dp, 180.dp))
+                video.durationLabel()?.let {
+                    Text(
+                        it,
+                        style = DotType.Meta,
+                        color = DotColors.Text,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(Color.Black.copy(alpha = 0.75f)).padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(video.title, style = DotType.Hero.copy(fontSize = 22.sp, lineHeight = 27.sp), color = if (focused) DotColors.Text else Color(0xFFD0D0D0), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                video.channelName?.let { Text(it.uppercase(), style = DotType.Label, color = DotColors.TextMuted, maxLines = 1) }
+                video.subtitle?.let { Text(it, style = DotType.Card, color = DotColors.TextDim, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            }
+        }
     }
 }

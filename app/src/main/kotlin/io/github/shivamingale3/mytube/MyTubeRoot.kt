@@ -8,7 +8,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import io.github.shivamingale3.mytube.skin.FocusRestore
+import io.github.shivamingale3.mytube.skin.LocalFocusRestore
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +49,10 @@ fun MyTubeRoot() {
 
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var playing by remember { mutableStateOf<Video?>(null) }
+    // The video played from Home or Search; it gets focus back when the player closes.
+    var playedFrom by remember { mutableStateOf<String?>(null) }
+    // Keeps each tab's scroll positions while the player or Settings is open.
+    val tabStates = rememberSaveableStateHolder()
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var splash by rememberSaveable { mutableStateOf(true) }
 
@@ -98,28 +106,31 @@ fun MyTubeRoot() {
             }
             else -> {
                 BackHandler(enabled = tab != Tab.Home) { tab = Tab.Home }
+                val play: (Video) -> Unit = { playedFrom = it.id; playing = it }
+                CompositionLocalProvider(LocalFocusRestore provides FocusRestore(playedFrom) { playedFrom = null }) {
                 DesignScale {
                     skin.Shell(
                         state = ShellState(tab, account),
-                        actions = ShellActions(selectTab = { tab = it }, openSettings = { settingsOpen = true }),
+                        actions = ShellActions(selectTab = { playedFrom = null; tab = it }, openSettings = { settingsOpen = true }),
                     ) {
                         when (tab) {
-                            Tab.Home -> skin.Home(
+                            Tab.Home -> tabStates.SaveableStateProvider("home") { skin.Home(
                                 homeState,
-                                HomeActions(play = { playing = it }, openSettings = { settingsOpen = true }, focus = home::onFocus),
-                            )
-                            Tab.Search -> skin.Search(
+                                HomeActions(play = play, openSettings = { settingsOpen = true }, focus = home::onFocus),
+                            ) }
+                            Tab.Search -> tabStates.SaveableStateProvider("search") { skin.Search(
                                 searchState,
                                 SearchActions(
                                     type = search::type,
                                     search = search::search,
-                                    play = { playing = it },
+                                    play = play,
                                     focus = search::onFocus,
                                     voice = voice,
                                 ),
-                            )
+                            ) }
                         }
                     }
+                }
                 }
             }
         }

@@ -1,5 +1,7 @@
 package io.github.shivamingale3.mytube.skin.dot
 
+import io.github.shivamingale3.mytube.skin.restoreFocus
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -86,7 +88,7 @@ private fun TopCards(state: HomeUiState, actions: HomeActions) {
 
 @Composable
 private fun Featured(video: Video, onPlay: () -> Unit) {
-    DotFocusable(onClick = onPlay, radius = 28.dp, modifier = Modifier.size(760.dp, 360.dp)) { _ ->
+    DotFocusable(onClick = onPlay, radius = 28.dp, modifier = Modifier.size(760.dp, 360.dp).restoreFocus(video.id)) { _ ->
         DotThumbnail(video.thumbnailUrl, focused = true, radius = 28.dp, modifier = Modifier.fillMaxSize())
         Box(
             Modifier.fillMaxSize().background(
@@ -117,8 +119,8 @@ private fun Featured(video: Video, onPlay: () -> Unit) {
 }
 
 @Composable
-private fun SideCard(onClick: (() -> Unit)?, content: @Composable (focused: Boolean) -> Unit) {
-    DotFocusable(onClick = onClick, radius = 28.dp, modifier = Modifier.size(408.dp, 172.dp)) { focused ->
+private fun SideCard(onClick: (() -> Unit)?, modifier: Modifier = Modifier, content: @Composable (focused: Boolean) -> Unit) {
+    DotFocusable(onClick = onClick, radius = 28.dp, modifier = modifier.size(408.dp, 172.dp)) { focused ->
         Box(
             Modifier.fillMaxSize()
                 .background(DotColors.Surface, CardShape)
@@ -131,7 +133,7 @@ private fun SideCard(onClick: (() -> Unit)?, content: @Composable (focused: Bool
 @Composable
 private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
     val video = state.continueWatching
-    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openSettings else null) { focused ->
+    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openSettings else null, modifier = video?.let { Modifier.restoreFocus(it.id) } ?: Modifier) { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("CONTINUE", style = DotType.Label, color = DotColors.TextDim)
             if (video == null) {
@@ -211,7 +213,7 @@ private fun VideoRowSection(row: VideoRow, label: String, onFocus: (Video) -> Un
 
 @Composable
 internal fun VideoCard(video: Video, onFocus: () -> Unit, width: Dp = RowCardWidth, modifier: Modifier = Modifier, onPlay: () -> Unit) {
-    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale, modifier = modifier) { focused ->
+    DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale, modifier = modifier.restoreFocus(video.id)) { focused ->
         if (focused) LaunchedEffect(video.id) { onFocus() }
         VideoCardContent(video, focused, width)
     }

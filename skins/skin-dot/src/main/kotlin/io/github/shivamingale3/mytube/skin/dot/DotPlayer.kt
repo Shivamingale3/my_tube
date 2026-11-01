@@ -73,7 +73,8 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var inputCount by remember { mutableIntStateOf(0) }
     val rootFocus = remember { FocusRequester() }
-    val scrubber = remember { Scrubber() }
+    // One per video, so a seek in progress can never land on the next video.
+    val scrubber = remember(state.video?.id) { Scrubber() }
     val shelf = remember { UpNextShelf() }
     val ended = state.phase == Phase.Ended
     val started = state.phase == Phase.Ready || state.phase == Phase.Ended || (state.phase == Phase.Buffering && state.positionMs > 0)
