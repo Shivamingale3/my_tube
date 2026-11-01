@@ -56,6 +56,7 @@ import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.screens.PlayerUiState.Phase
 import io.github.shivamingale3.mytube.skin.PlayerActions
 import io.github.shivamingale3.mytube.skin.Scrubber
+import io.github.shivamingale3.mytube.skin.UpNextShelf
 import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,10 +74,12 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
     var inputCount by remember { mutableIntStateOf(0) }
     val rootFocus = remember { FocusRequester() }
     val scrubber = remember { Scrubber() }
+    val shelf = remember { UpNextShelf() }
+    val ended = state.phase == Phase.Ended
     val started = state.phase == Phase.Ready || state.phase == Phase.Ended || (state.phase == Phase.Buffering && state.positionMs > 0)
 
     LaunchedEffect(inputCount, controlsVisible, sheet, state.isPlaying) {
-        if (controlsVisible && sheet == null && state.isPlaying) {
+        if (controlsVisible && sheet == null && !shelf.open && state.isPlaying) {
             delay(HIDE_AFTER_MS)
             controlsVisible = false
         }
@@ -84,7 +87,8 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
     // Controls hiding or a sheet opening ends a seek in progress.
     LaunchedEffect(controlsVisible, sheet) { if (!controlsVisible || sheet != null) scrubber.commit(actions.seekTo) }
     LaunchedEffect(sheet == Sheet.Stats) { actions.showStats(sheet == Sheet.Stats) }
-    LaunchedEffect(controlsVisible, started) { if (!controlsVisible || !started) rootFocus.requestFocus() }
+    LaunchedEffect(controlsVisible) { if (!controlsVisible) shelf.open = false }
+    LaunchedEffect(controlsVisible, started) { if (!ended && (!controlsVisible || !started)) rootFocus.requestFocus() }
 
     Box(
         Modifier.fillMaxSize().background(DotColors.Background)
@@ -92,7 +96,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             .focusable()
             .onPreviewKeyEvent { event ->
                 val seekKey = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
-                if (seekKey && started && !state.isLive && sheet == null) {
+                if (seekKey && started && !ended && !state.isLive && sheet == null) {
                     if (event.type == KeyEventType.KeyUp && scrubber.pendingMs != null) {
                         scrubber.commit(actions.seekTo)
                         return@onPreviewKeyEvent true
@@ -107,8 +111,13 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 inputCount++
                 when {
+                    event.key == Key.DirectionDown && controlsVisible && sheet == null && !shelf.open && shelf.buttonsFocused && state.related.isNotEmpty() -> {
+                        shelf.open = true
+                        true
+                    }
                     event.key == Key.Back -> when {
                         sheet != null -> { sheet = null; true }
+                        shelf.open -> { shelf.open = false; true }
                         controlsVisible && started && state.isPlaying -> { controlsVisible = false; true }
                         else -> false
                     }
@@ -117,7 +126,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
                     }
                     event.key == Key.MediaFastForward -> { actions.seekBy(SEEK_STEP_MS); true }
                     event.key == Key.MediaRewind -> { actions.seekBy(-SEEK_STEP_MS); true }
-                    !controlsVisible && started -> {
+                    !controlsVisible && started && !ended -> {
                         when (event.key) {
                             Key.DirectionLeft -> actions.seekBy(-SEEK_STEP_MS)
                             Key.DirectionRight -> actions.seekBy(SEEK_STEP_MS)
@@ -136,9 +145,10 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
         when {
             state.phase == Phase.Failed -> ErrorLayer(state, actions)
             !started -> LoadingLayer(state)
+            ended -> DotEndScreen(state, actions)
             else -> {
                 AnimatedVisibility(controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    ControlsLayer(state, actions, scrubber, onOpen = { sheet = it })
+                    ControlsLayer(state, actions, scrubber, shelf, onOpen = { sheet = it })
                 }
                 if (state.phase == Phase.Buffering) {
                     DotLoader(Modifier.align(Alignment.Center))
@@ -228,7 +238,7 @@ private fun BoxScope.ErrorLayer(state: PlayerUiState, actions: PlayerActions) {
 }
 
 @Composable
-private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, onOpen: (Sheet) -> Unit) {
+private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, shelf: UpNextShelf, onOpen: (Sheet) -> Unit) {
     // While seeking, everything shows the target position.
     val state = live.copy(positionMs = scrubber.pendingMs ?: live.positionMs)
     val barFocus = remember { FocusRequester() }
@@ -277,7 +287,11 @@ private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber:
                     Text(if (state.isLive) "LIVE" else formatTime(state.positionMs), style = DotType.MatrixNumber.copy(fontSize = 88.sp, lineHeight = 80.sp), color = if (state.isLive) DotColors.Accent else DotColors.Text)
                     if (!state.isLive) Text("/ ${formatTime(state.durationMs)}", style = DotType.Meta.copy(fontSize = 16.sp), color = DotColors.TextDim, modifier = Modifier.padding(bottom = 10.dp))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    Modifier.onFocusChanged { shelf.buttonsFocused = it.hasFocus },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
                     if (!state.isLive) RoundButton("-10", size = 56) { actions.seekBy(-SEEK_STEP_MS) }
                     PlayButton(playing = state.isPlaying, ended = state.phase == Phase.Ended, onClick = actions.togglePlay, modifier = Modifier.focusRequester(playFocus))
                     if (!state.isLive) RoundButton("+10", size = 56) { actions.seekBy(SEEK_STEP_MS) }
@@ -287,6 +301,11 @@ private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber:
                     Pill(speedLabel(state.speed), onClick = { onOpen(Sheet.Speed) })
                     if (state.showStatsButton) Pill("STATS", onClick = { onOpen(Sheet.Stats) })
                 }
+            }
+            if (shelf.open) {
+                UpNextRow(state, actions)
+            } else if (state.related.isNotEmpty()) {
+                Text("↓ UP NEXT", style = DotType.Label, color = DotColors.TextDim, modifier = Modifier.padding(top = 14.dp))
             }
         }
     }

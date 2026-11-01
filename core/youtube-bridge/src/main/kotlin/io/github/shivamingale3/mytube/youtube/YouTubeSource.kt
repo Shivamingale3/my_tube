@@ -2,6 +2,8 @@ package io.github.shivamingale3.mytube.youtube
 
 import android.content.Context
 import com.liskovsoft.mediaserviceinterfaces.ContentService
+import com.liskovsoft.mediaserviceinterfaces.MediaItemService
+import io.github.shivamingale3.mytube.model.Related
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem
 import io.github.shivamingale3.mytube.model.ChannelSummary
@@ -27,6 +29,24 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 class YouTubeSource(context: Context) {
     private val content: ContentService by lazy { MediaServiceCore.services(context).contentService }
+    private val items: MediaItemService by lazy { MediaServiceCore.services(context).mediaItemService }
+
+    /**
+     * What YouTube suggests after [videoId]: its "Up next" pick and the related videos (without
+     * [videoId] itself, Shorts or duplicates). Empty when the lookup fails.
+     */
+    suspend fun related(videoId: String): Related = withContext(Dispatchers.IO) {
+        runCatching {
+            val metadata = items.getMetadata(videoId) ?: return@runCatching Related()
+            val next = metadata.nextVideo?.toVideo()?.takeIf { it.id != videoId }
+            val videos = metadata.suggestions.orEmpty()
+                .flatMap { it.mediaItems.orEmpty() }
+                .mapNotNull { it.toVideo() }
+                .filter { it.id != videoId && !it.isShorts }
+                .distinctBy { it.id }
+            Related(next = next ?: videos.firstOrNull(), videos = videos.filter { it.id != (next ?: videos.firstOrNull())?.id }.take(MAX_RELATED))
+        }.getOrDefault(Related())
+    }
 
     /**
      * The home feed, emitted again each time YouTube sends another page of rows, so the first
@@ -102,6 +122,7 @@ class YouTubeSource(context: Context) {
         const val FEED_TIMEOUT_MS = 30_000L
         const val MAX_HOME_ROWS = 40
         const val MAX_SUGGESTIONS = 6
+        const val MAX_RELATED = 24
     }
 }
 

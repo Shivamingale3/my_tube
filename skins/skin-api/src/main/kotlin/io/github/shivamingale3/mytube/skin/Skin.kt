@@ -71,6 +71,9 @@ class PlayerActions(
     val retry: () -> Unit,
     /** The stats panel opened (true) or closed; stats are gathered only while it's open. */
     val showStats: (Boolean) -> Unit = {},
+    /** Plays another video in the player (Up next, a related video). */
+    val play: (Video) -> Unit = {},
+    val replay: () -> Unit = {},
 )
 
 /**

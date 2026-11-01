@@ -14,6 +14,7 @@ import io.github.shivamingale3.mytube.player.PlayerController
 import io.github.shivamingale3.mytube.player.PlayerStats
 import io.github.shivamingale3.mytube.player.VideoQuality
 import io.github.shivamingale3.mytube.youtube.YouTubePlayback
+import io.github.shivamingale3.mytube.youtube.YouTubeSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,6 +58,12 @@ data class PlayerUiState(
     val stats: PlayerStats? = null,
     /** Whether the skin should offer its stats panel (a setting). */
     val showStatsButton: Boolean = true,
+    /** What YouTube would play next, shown with a countdown when the video ends. */
+    val upNext: Video? = null,
+    /** Related videos, for the end screen and the "Up next" shelf. */
+    val related: List<Video> = emptyList(),
+    /** Seconds until [upNext] starts on its own; null when no countdown is running. */
+    val countdown: Int? = null,
 ) {
     enum class Phase { Resolving, Buffering, Ready, Ended, Failed }
 
@@ -68,6 +75,7 @@ data class PlayerUiState(
 }
 
 class PlayerViewModel(
+    private val youTube: YouTubeSource,
     private val playback: YouTubePlayback,
     private val controller: PlayerController,
     private val settings: AppSettings,
@@ -80,6 +88,7 @@ class PlayerViewModel(
 
     private var openJob: Job? = null
     private var tickJob: Job? = null
+    private var countdownJob: Job? = null
     private val skipped = mutableSetOf<SponsorSegment>()
     private var openedAt = 0L
     private var lastReportAt = 0L
@@ -100,8 +109,11 @@ class PlayerViewModel(
 
     fun open(video: Video) {
         openJob?.cancel()
+        countdownJob?.cancel()
         skipped.clear()
         reportPosition()
+        // Stop what was playing (e.g. an ended video) so its state can't leak into the new one.
+        controller.stop()
         openedAt = System.currentTimeMillis()
         lastReportAt = openedAt
         val prefs = settings.current
@@ -109,6 +121,10 @@ class PlayerViewModel(
         // Resume where the account's history left off, unless the video was nearly finished.
         val startMs = if (prefs.resume && !video.isLive && video.percentWatched in 1..95) video.durationMs * video.percentWatched / 100 else 0L
         openJob = viewModelScope.launch {
+            launch {
+                val related = youTube.related(video.id)
+                _state.update { if (it.video?.id == video.id) it.copy(upNext = related.next, related = related.videos) else it }
+            }
             if (prefs.sponsorBlock) launch {
                 val segments = playback.sponsorSegments(video.id).filter { it.category in SKIPPABLE }
                 _state.update { it.copy(segments = segments) }
@@ -182,6 +198,29 @@ class PlayerViewModel(
         refresh()
     }
 
+    /** Plays the video again from the start, stopping the countdown. */
+    fun replay() {
+        countdownJob?.cancel()
+        _state.update { it.copy(countdown = null) }
+        controller.seekTo(0)
+        controller.player.play()
+        refresh()
+    }
+
+    /** Counts down, then plays [PlayerUiState.upNext]; its streams are fetched meanwhile. */
+    private fun onEnded() {
+        val next = _state.value.upNext ?: return
+        playback.prefetch(next.id)
+        countdownJob?.cancel()
+        countdownJob = viewModelScope.launch {
+            for (left in AUTOPLAY_SECONDS downTo 1) {
+                _state.update { it.copy(countdown = left) }
+                delay(1_000)
+            }
+            open(next)
+        }
+    }
+
     fun retry() {
         _state.value.video?.let(::open)
     }
@@ -189,6 +228,7 @@ class PlayerViewModel(
     fun close() {
         reportPosition()
         openJob?.cancel()
+        countdownJob?.cancel()
         tickJob?.cancel()
         controller.stop()
         _state.value = PlayerUiState()
@@ -217,6 +257,7 @@ class PlayerViewModel(
             Player.STATE_ENDED -> PlayerUiState.Phase.Ended
             else -> _state.value.phase
         }
+        if (phase == PlayerUiState.Phase.Ended && _state.value.phase != PlayerUiState.Phase.Ended) onEnded()
         val firstFrame = _state.value.firstFrameMs ?: (System.currentTimeMillis() - openedAt).takeIf { phase == PlayerUiState.Phase.Ready }
         _state.update { s ->
             s.copy(
@@ -254,6 +295,7 @@ class PlayerViewModel(
         fun seconds(ms: Long) = "%.1f s".format(ms / 1000f)
 
         const val TICK_MS = 250L
+        const val AUTOPLAY_SECONDS = 10
         const val REPORT_EVERY_MS = 30_000L
         const val MIN_REPORT_POSITION_MS = 5_000L
         const val SEGMENT_END_MARGIN_MS = 500L
