@@ -12,8 +12,8 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.2.0"
+        versionCode = 14
+        versionName = "1.3.0"
         missingDimensionStrategy("default", "ststable")
         // CI's run number, which is also the release tag (build-<n>); lets the app spot newer releases.
         buildConfigField("int", "BUILD_NUMBER", (System.getenv("GITHUB_RUN_NUMBER") ?: "0"))

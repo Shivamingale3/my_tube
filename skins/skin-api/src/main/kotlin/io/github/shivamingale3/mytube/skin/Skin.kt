@@ -74,6 +74,8 @@ class PlayerActions(
     /** Plays another video in the player (Up next, a related video). */
     val play: (Video) -> Unit = {},
     val replay: () -> Unit = {},
+    /** Cycles audio-only mode: video → thumbnail → black → video. */
+    val cycleAudioMode: () -> Unit = {},
 )
 
 /**
