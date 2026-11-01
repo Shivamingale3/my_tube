@@ -67,6 +67,7 @@ fun PlayerRoute(video: Video, skin: Skin, onBack: () -> Unit, viewModel: PlayerV
         showStats = viewModel::showStats,
         play = viewModel::open,
         replay = viewModel::replay,
+        cycleAudioMode = viewModel::cycleAudioMode,
     )
     DesignScale {
         skin.Player(state, actions) {

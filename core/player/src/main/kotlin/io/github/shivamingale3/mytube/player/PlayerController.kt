@@ -116,6 +116,7 @@ class PlayerController(context: Context) {
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .clearOverrides()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !videoEnabled)
             .build()
         exoPlayer.setMediaSource(info.toMediaSource(), startPositionMs)
         exoPlayer.prepare()
@@ -141,6 +142,19 @@ class PlayerController(context: Context) {
     }
 
     fun seekTo(positionMs: Long) = exoPlayer.seekTo(positionMs)
+
+    // --- Audio only ------------------------------------------------------------------------------
+
+    /** False in audio-only mode: the video track isn't downloaded or decoded at all. */
+    var videoEnabled = true
+        private set
+
+    fun setVideoEnabled(enabled: Boolean) {
+        videoEnabled = enabled
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !enabled)
+            .build()
+    }
 
     // --- Quality -------------------------------------------------------------------------------
 

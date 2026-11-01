@@ -85,11 +85,16 @@ class YouTubeSource(context: Context) {
         }.getOrDefault(emptyList())
     }
 
-    /** Videos matching [query]; channels and playlists in the results are left out. */
+    /**
+     * Videos matching [query]; channels and playlists in the results are left out, and so are
+     * entries without a title (YouTube mixes in promoted or shelf items that only carry a video id
+     * and a thumbnail, which showed up as empty rows).
+     */
     suspend fun search(query: String): List<Video> = withContext(Dispatchers.IO) {
         content.getSearch(query).orEmpty()
             .flatMap { it.mediaItems.orEmpty() }
             .mapNotNull { it.toVideo() }
+            .filter { it.title.isNotBlank() }
             .distinctBy { it.id }
     }
 

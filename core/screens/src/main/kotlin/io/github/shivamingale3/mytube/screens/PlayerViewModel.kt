@@ -64,8 +64,16 @@ data class PlayerUiState(
     val related: List<Video> = emptyList(),
     /** Seconds until [upNext] starts on its own; null when no countdown is running. */
     val countdown: Int? = null,
+    val audioMode: AudioMode = AudioMode.Off,
 ) {
     enum class Phase { Resolving, Buffering, Ready, Ended, Failed }
+
+    /** Audio-only mode, cycled by the player's button: video → thumbnail + audio → black + audio → video. */
+    enum class AudioMode {
+        Off, Thumbnail, Black;
+
+        val next: AudioMode get() = entries[(ordinal + 1) % entries.size]
+    }
 
     val qualityLabel: String get() = pinnedQuality?.label ?: playingHeight?.let { "AUTO · ${it}p" } ?: "AUTO"
 
@@ -117,7 +125,14 @@ class PlayerViewModel(
         openedAt = System.currentTimeMillis()
         lastReportAt = openedAt
         val prefs = settings.current
-        _state.value = PlayerUiState(video = video, title = video.title, channelName = video.channelName, showStatsButton = prefs.statsButton)
+        // Audio-only mode stays on from one video to the next until it's cycled back.
+        _state.value = PlayerUiState(
+            video = video,
+            title = video.title,
+            channelName = video.channelName,
+            showStatsButton = prefs.statsButton,
+            audioMode = _state.value.audioMode,
+        )
         val startMs = if (prefs.resume && !video.isLive) resumePosition(video) else 0L
         openJob = viewModelScope.launch {
             launch {
@@ -197,6 +212,13 @@ class PlayerViewModel(
         refresh()
     }
 
+    /** Next audio-only mode; the video track is switched off in both audio modes. */
+    fun cycleAudioMode() {
+        val mode = _state.value.audioMode.next
+        controller.setVideoEnabled(mode == PlayerUiState.AudioMode.Off)
+        _state.update { it.copy(audioMode = mode) }
+    }
+
     /** Plays the video again from the start, stopping the countdown. */
     fun replay() {
         countdownJob?.cancel()
@@ -230,7 +252,7 @@ class PlayerViewModel(
         countdownJob?.cancel()
         tickJob?.cancel()
         controller.stop()
-        _state.value = PlayerUiState()
+        _state.value = PlayerUiState(audioMode = _state.value.audioMode)
     }
 
     /** Saves the position of the current video to the account's watch history. */

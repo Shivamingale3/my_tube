@@ -102,7 +102,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
                         scrubber.commit(actions.seekTo)
                         return@onPreviewKeyEvent true
                     }
-                    if (event.type == KeyEventType.KeyDown && (!controlsVisible || scrubber.barFocused)) {
+                    if (event.type == KeyEventType.KeyDown && (!controlsVisible || scrubber.barFocused || scrubber.pendingMs != null)) {
                         inputCount++
                         scrubber.step(event.key == Key.DirectionRight, event.nativeKeyEvent.repeatCount, state.positionMs, state.durationMs)
                         controlsVisible = true
@@ -142,6 +142,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             },
     ) {
         Box(Modifier.fillMaxSize()) { surface() }
+        AudioOnlyLayer(state)
 
         when {
             state.phase == Phase.Failed -> ErrorLayer(state, actions)
@@ -149,7 +150,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             ended -> DotEndScreen(state, actions)
             else -> {
                 AnimatedVisibility(controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    ControlsLayer(state, actions, scrubber, shelf, onOpen = { sheet = it })
+                    ControlsLayer(state, actions, scrubber, shelf, sheetOpen = sheet != null, onOpen = { sheet = it })
                 }
                 if (state.phase == Phase.Buffering) {
                     DotLoader(Modifier.align(Alignment.Center))
@@ -239,13 +240,15 @@ private fun BoxScope.ErrorLayer(state: PlayerUiState, actions: PlayerActions) {
 }
 
 @Composable
-private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, shelf: UpNextShelf, onOpen: (Sheet) -> Unit) {
+private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, shelf: UpNextShelf, sheetOpen: Boolean, onOpen: (Sheet) -> Unit) {
     // While seeking, everything shows the target position.
     val state = live.copy(positionMs = scrubber.pendingMs ?: live.positionMs)
     val barFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     // Like YouTube, the progress bar is selected first, so left and right seek straight away.
-    LaunchedEffect(Unit) { runCatching { if (live.isLive) playFocus.requestFocus() else barFocus.requestFocus() } }
+    // Play/pause is always the highlighted button when the controls appear, and focus comes back to it
+    // after a sheet (captions, quality, …) or the Up next shelf closes, so something is always highlighted.
+    LaunchedEffect(sheetOpen, shelf.open) { if (!sheetOpen && !shelf.open) runCatching { playFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxWidth().height(360.dp).align(Alignment.BottomCenter)
@@ -298,6 +301,15 @@ private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber:
                     if (!state.isLive) RoundButton("+10", size = 56) { actions.seekBy(SEEK_STEP_MS) }
                     Box(Modifier.size(1.dp, 32.dp).background(Color(0xFF333333)))
                     Pill(if (state.caption != null) "CC ON" else "CC", onClick = { onOpen(Sheet.Captions) }, enabled = state.captions.isNotEmpty())
+                    Pill(
+                        when (state.audioMode) {
+                            PlayerUiState.AudioMode.Off -> "VIDEO"
+                            PlayerUiState.AudioMode.Thumbnail -> "AUDIO · ART"
+                            PlayerUiState.AudioMode.Black -> "AUDIO · DARK"
+                        },
+                        onClick = actions.cycleAudioMode,
+                        filled = state.audioMode != PlayerUiState.AudioMode.Off,
+                    )
                     Pill("QUALITY", onClick = { onOpen(Sheet.Quality) }, enabled = state.qualities.isNotEmpty())
                     Pill(speedLabel(state.speed), onClick = { onOpen(Sheet.Speed) })
                     if (state.showStatsButton) Pill("STATS", onClick = { onOpen(Sheet.Stats) })
@@ -523,4 +535,19 @@ internal fun formatTime(ms: Long): String {
     val m = (total % 3600) / 60
     val s = total % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+}
+
+/** Audio-only mode covers the (switched-off) video with the thumbnail, or with black. */
+@Composable
+private fun BoxScope.AudioOnlyLayer(state: PlayerUiState) {
+    when (state.audioMode) {
+        PlayerUiState.AudioMode.Off -> Unit
+        PlayerUiState.AudioMode.Thumbnail -> AsyncImage(
+            model = state.video?.thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.matchParentSize().background(Color.Black),
+        )
+        PlayerUiState.AudioMode.Black -> Box(Modifier.matchParentSize().background(Color.Black))
+    }
 }
