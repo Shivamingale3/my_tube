@@ -161,11 +161,15 @@ private fun MediaItem.toVideo(): Video? {
     return Video(
         id = id,
         title = title.orEmpty(),
-        channelName = author,
+        // YouTube often sends "Channel • 7M views • 8 days ago" as both author and second title.
+        channelName = author?.substringBefore(" • ")?.trim()?.takeIf { it.isNotEmpty() },
         channelId = channelId,
         thumbnailUrl = cardImageUrl,
         durationMs = durationMs,
-        subtitle = secondTitle?.toString(),
+        subtitle = secondTitle?.toString()?.let { line ->
+            val channel = author?.substringBefore(" • ")?.trim()
+            if (channel != null && line.startsWith("$channel • ")) line.removePrefix("$channel • ") else line
+        },
         percentWatched = percentWatched,
         isLive = isLive,
         isShorts = isShorts,

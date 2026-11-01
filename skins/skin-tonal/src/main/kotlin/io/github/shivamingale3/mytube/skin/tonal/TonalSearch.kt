@@ -118,7 +118,9 @@ private fun ResultRow(video: Video, actions: SearchActions) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(28.dp),
         ) {
-            Box {
+            // Fixed size: the watched bar inside must not stretch this box across the row,
+            // which squeezed the title column to nothing on watched videos.
+            Box(Modifier.size(400.dp, 225.dp)) {
                 TonalThumbnail(video.thumbnailUrl, Modifier.size(400.dp, 225.dp), radius = 20.dp)
                 video.badge()?.let {
                     Text(
@@ -131,8 +133,8 @@ private fun ResultRow(video: Video, actions: SearchActions) {
                     )
                 }
                 if (video.percentWatched in 1..100) {
-                    Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.3f))) {
-                        Box(Modifier.fillMaxWidth(video.percentWatched / 100f).height(4.dp).background(TonalColors.Accent))
+                    Box(Modifier.align(Alignment.BottomStart).padding(horizontal = 14.dp, vertical = 8.dp).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(2.dp))) {
+                        Box(Modifier.fillMaxWidth(video.percentWatched / 100f).height(4.dp).background(TonalColors.Accent, RoundedCornerShape(2.dp)))
                     }
                 }
             }

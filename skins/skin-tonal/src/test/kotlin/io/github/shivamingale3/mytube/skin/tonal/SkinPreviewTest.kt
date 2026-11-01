@@ -133,7 +133,7 @@ class SkinPreviewTest {
         rows = listOf(VideoRow("Recommended", videos), VideoRow("Recently uploaded", videos.reversed())),
     )
 
-    private val search = SearchUiState(query = "engineering", searched = "engineering", results = videos, suggestions = listOf("engineering explained", "engineering memes", "engineering vs physics"))
+    private val search = SearchUiState(query = "engineering", searched = "engineering", results = listOf(videos[0].copy(percentWatched = 60)) + videos.drop(1), suggestions = listOf("engineering explained", "engineering memes", "engineering vs physics"))
     private val searchActions = SearchActions({}, {}, {}, {}, voice = {})
 
     private val settings = SettingsUiState(

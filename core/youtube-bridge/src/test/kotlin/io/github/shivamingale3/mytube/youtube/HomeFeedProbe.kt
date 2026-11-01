@@ -80,6 +80,27 @@ class HomeFeedProbe {
         result
     }
 
+    @Test
+    fun probeSearch() {
+        GlobalPreferences.instance(RuntimeEnvironment.getApplication())
+        val content = YouTubeServiceManager.instance().contentService
+        for (query in listOf("veritasium", "lofi music", "news")) {
+            val groups = pumpUntilDone { content.getSearch(query) }
+            println("PROBE search '$query' groups=${groups?.size}")
+            groups.orEmpty().forEachIndexed { g, group ->
+                group.mediaItems.orEmpty().take(3).forEachIndexed { i, it ->
+                    println(
+                        "PROBE   [$g/$i] type=${it.type} id=${it.videoId} title='${it.title}' second='${it.secondTitle}' " +
+                            "author='${it.author}' channel=${it.channelId} live=${it.isLive} shorts=${it.isShorts} " +
+                            "pct=${it.percentWatched} dur=${it.durationMs} badge='${it.badgeText}' playlist=${it.playlistId}",
+                    )
+                }
+            }
+            val videos = pumpUntilDone { runBlocking { YouTubeSource(RuntimeEnvironment.getApplication()).search(query) } }
+            videos.take(3).forEach { println("PROBE   bridge -> '${it.title}' ch='${it.channelName}' sub='${it.subtitle}'") }
+        }
+    }
+
     /** Runs [block] off the main thread while pumping the main looper, which RxHelper delivers on. */
     private fun <T> pumpUntilDone(block: () -> T): T {
         val future = Executors.newSingleThreadExecutor().submit(Callable(block))
