@@ -1,7 +1,9 @@
 package io.github.shivamingale3.mytube.player
 
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.view.Display
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -10,6 +12,8 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.common.util.Util
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.dash.DashMediaSource
@@ -22,6 +26,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import io.github.shivamingale3.mytube.model.PlaybackInfo
 import io.github.shivamingale3.mytube.model.StreamSource
+import kotlin.math.roundToInt
 
 /** A video resolution the current stream offers, e.g. 2160 → "2160p", 1080 at 60 fps → "1080p60". */
 data class VideoQuality(val height: Int, val frameRate: Int) {
@@ -30,6 +35,39 @@ data class VideoQuality(val height: Int, val frameRate: Int) {
 
 /** A caption language the current video offers. */
 data class CaptionChoice(val id: String, val label: String)
+
+/** One stream YouTube offered, as the stats panel lists it. */
+data class StreamTrack(
+    /** e.g. "2160p60" for video, "eng" for audio. */
+    val label: String,
+    /** e.g. "vp09.00.51.08", "avc1.640028", "opus". */
+    val codec: String,
+    val bitrateKbps: Int,
+    val support: Support,
+    val playing: Boolean,
+) {
+    enum class Support {
+        /** The decoder says it can play it. */
+        Ok,
+        /** Beyond the decoder's declared speed, allowed anyway (see TvRenderersFactory). */
+        Lifted,
+        /** No decoder, or too big. */
+        Unsupported,
+    }
+}
+
+/** What the player knows right now, for the stats panel. */
+data class PlayerStats(
+    /** The screen mode Android reports, e.g. "1920×1080 @60". */
+    val display: String,
+    val videoDecoder: String?,
+    val audioDecoder: String?,
+    val video: List<StreamTrack>,
+    val audio: List<StreamTrack>,
+    val droppedFrames: Int,
+    val bandwidthKbps: Long,
+    val bufferedMs: Long,
+)
 
 /**
  * Owns the app's single ExoPlayer. Skins draw their own surface and controls on top of [player];
@@ -41,9 +79,40 @@ class PlayerController(context: Context) {
 
     val player: Player get() = exoPlayer
 
-    private val exoPlayer: ExoPlayer by lazy { ExoPlayer.Builder(appContext).build() }
+    /** IDs of formats allowed past the decoder's declared limits; written on the playback thread. */
+    private val lifted: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    @Volatile private var videoDecoder: String? = null
+    @Volatile private var audioDecoder: String? = null
+    @Volatile private var droppedFrames = 0
+    @Volatile private var bandwidthKbps = 0L
+
+    private val exoPlayer: ExoPlayer by lazy {
+        ExoPlayer.Builder(appContext, TvRenderersFactory(appContext, lifted)).build().apply {
+            // Many TVs report a 1080p screen mode on a 4K panel; don't let that cap the picture.
+            trackSelectionParameters = trackSelectionParameters.buildUpon().clearViewportSizeConstraints().build()
+            addAnalyticsListener(object : AnalyticsListener {
+                override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                    videoDecoder = decoderName
+                }
+                override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                    audioDecoder = decoderName
+                }
+                override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+                    this@PlayerController.droppedFrames += droppedFrames
+                }
+                override fun onBandwidthEstimate(eventTime: AnalyticsListener.EventTime, totalLoadTimeMs: Int, totalBytesLoaded: Long, bitrateEstimate: Long) {
+                    bandwidthKbps = bitrateEstimate / 1000
+                }
+            })
+        }
+    }
 
     fun play(info: PlaybackInfo, startPositionMs: Long = 0) {
+        lifted.clear()
+        videoDecoder = null
+        audioDecoder = null
+        droppedFrames = 0
         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
             .clearOverrides()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -151,6 +220,39 @@ class PlayerController(context: Context) {
 
     fun setSpeed(speed: Float) {
         exoPlayer.playbackParameters = PlaybackParameters(speed)
+    }
+
+    // --- Stats ---------------------------------------------------------------------------------
+
+    fun stats(): PlayerStats {
+        fun tracks(type: Int) = exoPlayer.currentTracks.groups.filter { it.type == type }.flatMap { group ->
+            (0 until group.length).map { i ->
+                val f = group.getTrackFormat(i)
+                StreamTrack(
+                    label = if (type == C.TRACK_TYPE_VIDEO) VideoQuality(f.height, f.frameRate.takeIf { it > 0 }?.toInt() ?: 0).label else f.language ?: f.label ?: "audio",
+                    codec = f.codecs ?: f.sampleMimeType ?: "?",
+                    bitrateKbps = f.bitrate.takeIf { it > 0 }?.div(1000) ?: 0,
+                    support = when {
+                        !group.isTrackSupported(i) -> StreamTrack.Support.Unsupported
+                        f.id in lifted -> StreamTrack.Support.Lifted
+                        else -> StreamTrack.Support.Ok
+                    },
+                    playing = group.isTrackSelected(i),
+                )
+            }
+        }.sortedByDescending { it.bitrateKbps }
+        val display = (appContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).getDisplay(Display.DEFAULT_DISPLAY)
+        val size = Util.getCurrentDisplayModeSize(appContext, display)
+        return PlayerStats(
+            display = "${size.x}×${size.y} @${display.refreshRate.roundToInt()}",
+            videoDecoder = videoDecoder,
+            audioDecoder = audioDecoder,
+            video = tracks(C.TRACK_TYPE_VIDEO),
+            audio = tracks(C.TRACK_TYPE_AUDIO),
+            droppedFrames = droppedFrames,
+            bandwidthKbps = bandwidthKbps,
+            bufferedMs = (exoPlayer.bufferedPosition - exoPlayer.currentPosition).coerceAtLeast(0),
+        )
     }
 
     // --- Sources -------------------------------------------------------------------------------

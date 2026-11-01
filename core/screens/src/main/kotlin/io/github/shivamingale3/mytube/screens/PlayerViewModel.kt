@@ -11,6 +11,7 @@ import io.github.shivamingale3.mytube.model.SponsorSegment
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.player.CaptionChoice
 import io.github.shivamingale3.mytube.player.PlayerController
+import io.github.shivamingale3.mytube.player.PlayerStats
 import io.github.shivamingale3.mytube.player.VideoQuality
 import io.github.shivamingale3.mytube.youtube.YouTubePlayback
 import kotlinx.coroutines.Job
@@ -47,6 +48,13 @@ data class PlayerUiState(
     val speed: Float = 1f,
     /** Stream type and YouTube client, e.g. "DASH · TV"; shown for troubleshooting. */
     val sourceLabel: String? = null,
+    /** e.g. "2 clients · 9.8 s"; how the streams were found. */
+    val resolveLabel: String? = null,
+    /** Seconds from pressing play until the streams were in hand, and until the first frame. */
+    val waitedMs: Long? = null,
+    val firstFrameMs: Long? = null,
+    /** Filled only while the skin shows its stats panel; see [PlayerViewModel.showStats]. */
+    val stats: PlayerStats? = null,
 ) {
     enum class Phase { Resolving, Buffering, Ready, Ended, Failed }
 
@@ -70,6 +78,8 @@ class PlayerViewModel(
     private var openJob: Job? = null
     private var tickJob: Job? = null
     private val skipped = mutableSetOf<SponsorSegment>()
+    private var openedAt = 0L
+    private var statsShown = false
 
     private val listener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) = refresh()
@@ -87,6 +97,7 @@ class PlayerViewModel(
     fun open(video: Video) {
         openJob?.cancel()
         skipped.clear()
+        openedAt = System.currentTimeMillis()
         _state.value = PlayerUiState(video = video, title = video.title, channelName = video.channelName)
         openJob = viewModelScope.launch {
             launch {
@@ -108,6 +119,8 @@ class PlayerViewModel(
                 channelName = info.channelName ?: it.channelName,
                 isLive = info.isLive,
                 sourceLabel = listOfNotNull(info.source.label, info.clientName).joinToString(" · "),
+                resolveLabel = "${info.clientTries} ${if (info.clientTries == 1) "client" else "clients"} · ${seconds(info.resolveMs)}",
+                waitedMs = System.currentTimeMillis() - openedAt,
             )
         }
         tickJob?.cancel()
@@ -148,6 +161,13 @@ class PlayerViewModel(
         refresh()
     }
 
+    /** The skin opened or closed its stats panel; stats are only gathered while it's open. */
+    fun showStats(shown: Boolean) {
+        statsShown = shown
+        if (!shown) _state.update { it.copy(stats = null) }
+        refresh()
+    }
+
     fun retry() {
         _state.value.video?.let(::open)
     }
@@ -171,9 +191,12 @@ class PlayerViewModel(
             Player.STATE_ENDED -> PlayerUiState.Phase.Ended
             else -> _state.value.phase
         }
+        val firstFrame = _state.value.firstFrameMs ?: (System.currentTimeMillis() - openedAt).takeIf { phase == PlayerUiState.Phase.Ready }
         _state.update { s ->
             s.copy(
                 phase = phase,
+                firstFrameMs = firstFrame,
+                stats = if (statsShown) controller.stats() else null,
                 positionMs = position,
                 durationMs = p.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: s.durationMs,
                 isPlaying = p.isPlaying,
@@ -194,6 +217,8 @@ class PlayerViewModel(
     }
 
     private companion object {
+        fun seconds(ms: Long) = "%.1f s".format(ms / 1000f)
+
         const val TICK_MS = 250L
         const val SEGMENT_END_MARGIN_MS = 500L
         val SKIPPABLE = setOf("sponsor", "selfpromo", "interaction")

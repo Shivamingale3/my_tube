@@ -16,6 +16,9 @@ data class PlaybackInfo(
     val captions: List<CaptionTrack> = emptyList(),
     /** Which YouTube client the streams came from, e.g. "TV"; shown for troubleshooting. */
     val clientName: String? = null,
+    /** How many YouTube clients were asked before this answer, and how long that took. */
+    val clientTries: Int = 1,
+    val resolveMs: Long = 0,
 )
 
 data class CaptionTrack(

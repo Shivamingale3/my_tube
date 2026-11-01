@@ -31,6 +31,8 @@ import io.github.shivamingale3.mytube.model.ChannelSummary
 import io.github.shivamingale3.mytube.model.SponsorSegment
 import io.github.shivamingale3.mytube.player.VideoQuality
 import io.github.shivamingale3.mytube.screens.PlayerUiState
+import io.github.shivamingale3.mytube.player.PlayerStats
+import io.github.shivamingale3.mytube.player.StreamTrack
 import io.github.shivamingale3.mytube.skin.PlayerActions
 import io.github.shivamingale3.mytube.model.UserAccount
 import io.github.shivamingale3.mytube.model.Video
@@ -171,6 +173,45 @@ class DotPreviewTest {
         }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/previews/dot-quality.png")
+    }
+
+    @Test
+    fun statsPanel() {
+        val video = { label: String, codec: String, kbps: Int, support: StreamTrack.Support, playing: Boolean ->
+            StreamTrack(label, codec, kbps, support, playing)
+        }
+        val state = playerState(PlayerUiState.Phase.Ready).copy(
+            sourceLabel = "DASH · VISIONOS",
+            resolveLabel = "1 client · 2.4 s",
+            waitedMs = 1_200,
+            firstFrameMs = 3_100,
+            stats = PlayerStats(
+                display = "1920×1080 @60",
+                videoDecoder = "OMX.amlogic.vp9.decoder.awesome",
+                audioDecoder = "OMX.google.opus.decoder",
+                video = listOf(
+                    video("2160p60", "vp09.00.51.08", 21_400, StreamTrack.Support.Lifted, true),
+                    video("1440p60", "vp09.00.50.08", 9_800, StreamTrack.Support.Ok, false),
+                    video("1080p60", "avc1.64002a", 6_100, StreamTrack.Support.Ok, false),
+                    video("2160p60", "av01.0.13M.08", 17_200, StreamTrack.Support.Unsupported, false),
+                ),
+                audio = listOf(video("eng", "opus", 128, StreamTrack.Support.Ok, true)),
+                droppedFrames = 3,
+                bandwidthKbps = 48_000,
+                bufferedMs = 24_000,
+            ),
+        )
+        compose.setContent {
+            DesignScale {
+                DotSkin.Theme {
+                    Box(Modifier.fillMaxSize().dotGrid(), contentAlignment = androidx.compose.ui.Alignment.CenterEnd) {
+                        StatsPanel(state)
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/previews/dot-stats.png")
     }
 
     private val sampleAccount = UserAccount(1, "Shivam", null, null, isSelected = true)
