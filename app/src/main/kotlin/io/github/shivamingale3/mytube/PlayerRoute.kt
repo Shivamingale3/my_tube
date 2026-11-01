@@ -15,7 +15,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
+import android.text.Layout
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.SubtitleView
@@ -91,12 +93,26 @@ private fun Captions(player: Player, modifier: Modifier) {
         }
     }
     DisposableEffect(player) {
-        view.setCues(player.currentCues.cues)
+        view.setCues(player.currentCues.cues.map(::centred))
         val listener = object : Player.Listener {
-            override fun onCues(cueGroup: CueGroup) = view.setCues(cueGroup.cues)
+            override fun onCues(cueGroup: CueGroup) = view.setCues(cueGroup.cues.map(::centred))
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
     AndroidView(factory = { view }, modifier = modifier)
 }
+
+/**
+ * YouTube's captions (auto-generated ones especially) are timed for its web player and pin every
+ * line to the left edge (`align:start position:0%`). Drop the placement so they sit bottom centre.
+ */
+@OptIn(UnstableApi::class)
+private fun centred(cue: Cue): Cue = cue.buildUpon()
+    .setTextAlignment(Layout.Alignment.ALIGN_CENTER)
+    .setPosition(Cue.DIMEN_UNSET)
+    .setPositionAnchor(Cue.TYPE_UNSET)
+    .setLine(Cue.DIMEN_UNSET, Cue.TYPE_UNSET)
+    .setLineAnchor(Cue.TYPE_UNSET)
+    .setSize(Cue.DIMEN_UNSET)
+    .build()
