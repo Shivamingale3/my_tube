@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import io.github.shivamingale3.mytube.model.ChannelSummary
@@ -35,6 +36,9 @@ import io.github.shivamingale3.mytube.screens.HomeUiState
 import io.github.shivamingale3.mytube.skin.HomeActions
 
 private val CardShape = RoundedCornerShape(28.dp)
+
+/** Row cards: 280 × 158, a quarter larger than the first version's 224 × 126. */
+internal val RowCardWidth = 280.dp
 
 @Composable
 internal fun DotHome(state: HomeUiState, actions: HomeActions) {
@@ -119,7 +123,7 @@ private fun SideCard(onClick: (() -> Unit)?, content: @Composable (focused: Bool
 @Composable
 private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
     val video = state.continueWatching
-    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openAccount else null) { focused ->
+    SideCard(onClick = if (video != null) ({ actions.play(video) }) else if (!state.personalized) actions.openSettings else null) { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("CONTINUE", style = DotType.Label, color = DotColors.TextDim)
             if (video == null) {
@@ -145,7 +149,7 @@ private fun ContinueCard(state: HomeUiState, actions: HomeActions) {
 @Composable
 private fun NewUploadsCard(state: HomeUiState, actions: HomeActions) {
     val channels = state.channels
-    SideCard(onClick = if (channels.isNotEmpty()) actions.openSubscriptions else if (!state.personalized) actions.openAccount else null) { _ ->
+    SideCard(onClick = if (!state.personalized) actions.openSettings else null) { _ ->
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
                 Text("NEW UPLOADS", style = DotType.Label, color = DotColors.TextDim)
@@ -198,20 +202,20 @@ private fun VideoRowSection(row: VideoRow, label: String, onFocus: (Video) -> Un
 }
 
 @Composable
-private fun VideoCard(video: Video, onFocus: () -> Unit, onPlay: () -> Unit) {
+internal fun VideoCard(video: Video, onFocus: () -> Unit, width: Dp = RowCardWidth, onPlay: () -> Unit) {
     DotFocusable(onClick = onPlay, radius = 18.dp, focusedScale = CardFocusScale) { focused ->
         if (focused) LaunchedEffect(video.id) { onFocus() }
-        VideoCardContent(video, focused)
+        VideoCardContent(video, focused, width)
     }
 }
 
 @Composable
-internal fun VideoCardContent(video: Video, focused: Boolean) {
+internal fun VideoCardContent(video: Video, focused: Boolean, width: Dp = RowCardWidth) {
     Column(
-        Modifier.width(224.dp),
+        Modifier.width(width),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        DotThumbnail(video.thumbnailUrl, focused = focused, modifier = Modifier.size(224.dp, 126.dp))
+        DotThumbnail(video.thumbnailUrl, focused = focused, modifier = Modifier.size(width, width * 9 / 16))
         Text(
             video.title,
             style = DotType.Card,
@@ -223,7 +227,7 @@ internal fun VideoCardContent(video: Video, focused: Boolean) {
     }
 }
 
-private fun Video.durationLabel(): String? {
+internal fun Video.durationLabel(): String? {
     if (isLive) return "LIVE"
     if (durationMs <= 0) return null
     val totalSeconds = durationMs / 1000

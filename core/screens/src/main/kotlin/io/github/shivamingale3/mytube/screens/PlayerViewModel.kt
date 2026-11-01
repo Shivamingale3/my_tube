@@ -55,6 +55,8 @@ data class PlayerUiState(
     val firstFrameMs: Long? = null,
     /** Filled only while the skin shows its stats panel; see [PlayerViewModel.showStats]. */
     val stats: PlayerStats? = null,
+    /** Whether the skin should offer its stats panel (a setting). */
+    val showStatsButton: Boolean = true,
 ) {
     enum class Phase { Resolving, Buffering, Ready, Ended, Failed }
 
@@ -68,6 +70,7 @@ data class PlayerUiState(
 class PlayerViewModel(
     private val playback: YouTubePlayback,
     private val controller: PlayerController,
+    private val settings: AppSettings,
 ) : ViewModel() {
 
     val player: Player get() = controller.player
@@ -79,6 +82,7 @@ class PlayerViewModel(
     private var tickJob: Job? = null
     private val skipped = mutableSetOf<SponsorSegment>()
     private var openedAt = 0L
+    private var lastReportAt = 0L
     private var statsShown = false
 
     private val listener = object : Player.Listener {
@@ -97,21 +101,26 @@ class PlayerViewModel(
     fun open(video: Video) {
         openJob?.cancel()
         skipped.clear()
+        reportPosition()
         openedAt = System.currentTimeMillis()
-        _state.value = PlayerUiState(video = video, title = video.title, channelName = video.channelName)
+        lastReportAt = openedAt
+        val prefs = settings.current
+        _state.value = PlayerUiState(video = video, title = video.title, channelName = video.channelName, showStatsButton = prefs.statsButton)
+        // Resume where the account's history left off, unless the video was nearly finished.
+        val startMs = if (prefs.resume && !video.isLive && video.percentWatched in 1..95) video.durationMs * video.percentWatched / 100 else 0L
         openJob = viewModelScope.launch {
-            launch {
+            if (prefs.sponsorBlock) launch {
                 val segments = playback.sponsorSegments(video.id).filter { it.category in SKIPPABLE }
                 _state.update { it.copy(segments = segments) }
             }
             runCatching { playback.load(video.id) }
-                .onSuccess { info -> start(info) }
+                .onSuccess { info -> start(info, startMs) }
                 .onFailure { e -> _state.update { it.copy(phase = PlayerUiState.Phase.Failed, error = e.message ?: e.toString()) } }
         }
     }
 
-    private fun start(info: PlaybackInfo) {
-        controller.play(info)
+    private fun start(info: PlaybackInfo, startMs: Long) {
+        controller.play(info, startMs)
         _state.update {
             it.copy(
                 phase = PlayerUiState.Phase.Buffering,
@@ -173,10 +182,22 @@ class PlayerViewModel(
     }
 
     fun close() {
+        reportPosition()
         openJob?.cancel()
         tickJob?.cancel()
         controller.stop()
         _state.value = PlayerUiState()
+    }
+
+    /** Saves the position of the current video to the account's watch history. */
+    private fun reportPosition() {
+        val s = _state.value
+        val video = s.video ?: return
+        if (s.isLive || s.positionMs < MIN_REPORT_POSITION_MS) return
+        val position = s.positionMs
+        lastReportAt = System.currentTimeMillis()
+        // Runs in the bridge's own scope, so closing the player doesn't cancel it.
+        playback.reportPosition(video.id, position)
     }
 
     private fun refresh() {
@@ -209,6 +230,14 @@ class PlayerViewModel(
                 speed = controller.speed,
             )
         }
+        afterRefresh()
+    }
+
+    /** Called after every refresh: skips segments when asked to, and saves the position now and then. */
+    private fun afterRefresh() {
+        val s = _state.value
+        if (settings.current.autoSkip && s.activeSegment != null) skipSegment()
+        if (s.isPlaying && System.currentTimeMillis() - lastReportAt > REPORT_EVERY_MS) reportPosition()
     }
 
     override fun onCleared() {
@@ -220,6 +249,8 @@ class PlayerViewModel(
         fun seconds(ms: Long) = "%.1f s".format(ms / 1000f)
 
         const val TICK_MS = 250L
+        const val REPORT_EVERY_MS = 30_000L
+        const val MIN_REPORT_POSITION_MS = 5_000L
         const val SEGMENT_END_MARGIN_MS = 500L
         val SKIPPABLE = setOf("sponsor", "selfpromo", "interaction")
     }

@@ -16,6 +16,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -53,6 +54,11 @@ class YouTubePlayback(context: Context) {
         runCatching {
             items.getSponsorSegments(videoId).orEmpty().map { SponsorSegment(it.startMs, it.endMs, it.category.orEmpty()) }
         }.getOrDefault(emptyList())
+    }
+
+    /** Saves the watch position to the signed-in account's history, so YouTube resumes it everywhere. */
+    fun reportPosition(videoId: String, positionMs: Long) {
+        scope.launch { runCatching { items.updateHistoryPosition(videoId, positionMs / 1000f) } }
     }
 
     private fun Pair<Long, Deferred<PlaybackInfo>>.isStale() =

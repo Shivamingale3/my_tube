@@ -255,7 +255,7 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
                     Pill(if (state.caption != null) "CC ON" else "CC", onClick = { onOpen(Sheet.Captions) }, enabled = state.captions.isNotEmpty())
                     Pill("QUALITY", onClick = { onOpen(Sheet.Quality) }, enabled = state.qualities.isNotEmpty())
                     Pill(speedLabel(state.speed), onClick = { onOpen(Sheet.Speed) })
-                    Pill("STATS", onClick = { onOpen(Sheet.Stats) })
+                    if (state.showStatsButton) Pill("STATS", onClick = { onOpen(Sheet.Stats) })
                 }
             }
         }
@@ -318,7 +318,7 @@ private fun RoundButton(label: String, size: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Pill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = false) {
+internal fun Pill(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, filled: Boolean = false) {
     DotFocusable(onClick = if (enabled) onClick else null, radius = 999.dp, modifier = modifier) { focused ->
         val inverted = focused || filled
         Box(

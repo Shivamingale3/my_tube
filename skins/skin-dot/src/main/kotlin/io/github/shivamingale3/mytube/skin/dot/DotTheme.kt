@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
+import io.github.shivamingale3.mytube.skin.SkinAccent
 import androidx.tv.material3.darkColorScheme
 
 /** Dot palette: black and white, with one accent for live state. */
@@ -24,7 +25,8 @@ internal object DotColors {
     val TextDim = Color(0xFF7A7A7A)
     val Track = Color(0xFF2E2E2E)
     val GridDot = Color(0xFF1C1C1C)
-    val Accent = Color(0xFFFF2E4D)
+    /** The accent picked in Settings. */
+    val Accent: Color get() = SkinAccent.color
     val Sponsor = Color(0xFF00D26A)
 }
 

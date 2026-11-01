@@ -12,9 +12,11 @@ android {
         applicationId = "io.github.shivamingale3.mytube"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.6.1"
+        versionCode = 11
+        versionName = "1.0.0"
         missingDimensionStrategy("default", "ststable")
+        // CI's run number, which is also the release tag (build-<n>); lets the app spot newer releases.
+        buildConfigField("int", "BUILD_NUMBER", (System.getenv("GITHUB_RUN_NUMBER") ?: "0"))
         ndk {
             // The target TV runs 32-bit userspace; 64-bit libraries would double the APK for nothing.
             abiFilters += listOf("armeabi-v7a")
@@ -43,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -66,6 +69,7 @@ dependencies {
     implementation(project(":core:player"))
     implementation(project(":core:screens"))
     implementation(project(":skins:skin-dot"))
+    implementation(project(":skins:skin-tonal"))
     implementation(libs.coil.compose)
     implementation(libs.coil.network.ktor)
     implementation(libs.ktor.client.android)
