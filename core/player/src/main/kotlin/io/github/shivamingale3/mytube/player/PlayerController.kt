@@ -237,7 +237,8 @@ class PlayerController(context: Context) {
                         f.id in lifted -> StreamTrack.Support.Lifted
                         else -> StreamTrack.Support.Ok
                     },
-                    playing = group.isTrackSelected(i),
+                    // Adaptive playback selects many tracks; only the one being decoded is playing.
+                    playing = f.id != null && f.id == (if (type == C.TRACK_TYPE_VIDEO) exoPlayer.videoFormat else exoPlayer.audioFormat)?.id,
                 )
             }
         }.sortedByDescending { it.bitrateKbps }
