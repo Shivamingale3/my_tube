@@ -24,6 +24,8 @@ import androidx.media3.ui.SubtitleView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import io.github.shivamingale3.mytube.screens.PlayerUiState
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.modifiers.resizeWithContentScale
@@ -44,6 +46,14 @@ fun PlayerRoute(video: Video, skin: Skin, onBack: () -> Unit, viewModel: PlayerV
     LaunchedEffect(video.id) { viewModel.open(video) }
     DisposableEffect(Unit) { onDispose { viewModel.close() } }
     BackHandler(onBack = onBack)
+
+    // Hold off the TV's screensaver while a video plays or loads; once paused, it may come on again.
+    val view = LocalView.current
+    val keepOn = state.isPlaying || state.phase == PlayerUiState.Phase.Resolving || state.phase == PlayerUiState.Phase.Buffering
+    DisposableEffect(view, keepOn) {
+        view.keepScreenOn = keepOn
+        onDispose { view.keepScreenOn = false }
+    }
 
     val actions = PlayerActions(
         togglePlay = viewModel::togglePlay,
