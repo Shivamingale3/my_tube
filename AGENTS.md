@@ -173,7 +173,12 @@ Toolchain: AGP 8.13, Kotlin 2.3, Gradle 8.14, JDK 17, compileSdk 36, minSdk 26, 
 - `Scrubber` (skin-api): ←/→ with controls hidden, or with the progress bar focused, seeks. A
   tap is 10 s; holding speeds up (10 s, 30 s, 1 min, 3 min, 5 min, 10 min). Only the target moves
   while held; the seek happens on release. It's keyed per video.
-- The progress bar is the default focus when controls appear (the play button on live streams).
+- **Play/pause is always the default focus** when the controls appear, and focus returns to it
+  after a sheet or the Up next shelf closes, so a button is always highlighted. ↑ reaches the
+  progress bar. A seek hold in progress keeps scrubbing even after focus lands on play/pause.
+- **Audio-only button** (beside Captions) cycles video → thumbnail + audio → black + audio. Both
+  audio modes disable the video track type in `PlayerController`; the mode carries over to the
+  next video.
 - ↓ from the control buttons opens the Up next shelf (`UpNextShelf`); Back closes it.
 - Back order in the player: close sheet → close shelf → hide controls → leave player.
 - Use `Modifier.restoreFocus(video.id)` on anything that plays a video from Home or Search.
