@@ -5,6 +5,7 @@ import com.liskovsoft.googlecommon.common.helpers.DefaultHeaders
 import com.liskovsoft.mediaserviceinterfaces.MediaItemService
 import com.liskovsoft.mediaserviceinterfaces.ServiceManager
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo
+import com.liskovsoft.youtubeapi.videoinfo.V2.VideoInfoService
 import io.github.shivamingale3.mytube.model.CaptionTrack
 import io.github.shivamingale3.mytube.model.PlaybackInfo
 import io.github.shivamingale3.mytube.model.PlaybackUnavailableException
@@ -21,7 +22,8 @@ import kotlinx.coroutines.withContext
 
 /** Resolves a video ID to ad-free streams through MediaServiceCore. */
 class YouTubePlayback(context: Context) {
-    private val services: ServiceManager by lazy { MediaServiceCore.services(context) }
+    private val services: ServiceManager by lazy { MediaServiceCore.services(context).also { restoreClient() } }
+    private val prefs = context.applicationContext.getSharedPreferences("mytube.playback", Context.MODE_PRIVATE)
     private val items: MediaItemService by lazy { services.mediaItemService }
 
     // Client switching is global state in MediaServiceCore, so resolve one video at a time.
@@ -63,6 +65,7 @@ class YouTubePlayback(context: Context) {
         // MediaServiceCore knows about ten YouTube clients; a few tries usually reach one with DASH.
         const val MAX_CLIENT_TRIES = 6
         const val CLIENT_SEARCH_BACKOFF_MS = 30 * 60_000L
+        const val KEY_CLIENT = "client"
     }
 
     /**
@@ -72,22 +75,48 @@ class YouTubePlayback(context: Context) {
      */
     private suspend fun resolve(videoId: String): PlaybackInfo = withContext(Dispatchers.IO) {
         resolving.withLock {
+            val started = System.currentTimeMillis()
             var fallback: MediaItemFormatInfo? = null
             var refusal: String? = null
-            val tries = if (System.currentTimeMillis() < skipClientSearchUntil) 1 else MAX_CLIENT_TRIES
-            repeat(tries) {
+            val tries = if (started < skipClientSearchUntil) 1 else MAX_CLIENT_TRIES
+            for (attempt in 1..tries) {
                 val info = items.getFormatInfo(videoId)
                 when {
                     info == null -> Unit
                     info.isUnplayable -> refusal = refusal ?: info.playabilityReason
-                    info.hasAdaptiveStreams() -> return@withContext info.toPlaybackInfo(videoId)
+                    info.hasAdaptiveStreams() -> {
+                        rememberClient(info)
+                        return@withContext info.toPlaybackInfo(videoId, attempt, System.currentTimeMillis() - started)
+                    }
                     fallback == null -> fallback = info
                 }
                 if (tries > 1) services.switchNextClientNow()
             }
             if (fallback != null && tries > 1) skipClientSearchUntil = System.currentTimeMillis() + CLIENT_SEARCH_BACKOFF_MS
-            fallback?.toPlaybackInfo(videoId)
+            fallback?.toPlaybackInfo(videoId, tries, System.currentTimeMillis() - started)
                 ?: throw PlaybackUnavailableException(refusal ?: "YouTube returned no stream information")
+        }
+    }
+
+    // MediaServiceCore saves the client that worked but starts every launch from the first one
+    // (TV, which now often offers only SABR). Remember the one that gave DASH or HLS ourselves.
+    private fun rememberClient(info: MediaItemFormatInfo) {
+        val name = (info.clientInfo as? Enum<*>)?.name ?: return
+        if (prefs.getString(KEY_CLIENT, null) != name) prefs.edit().putString(KEY_CLIENT, name).apply()
+    }
+
+    /**
+     * Points MediaServiceCore at the remembered client before the first request. Its client enum
+     * and the field holding the next client are internal, hence reflection; any failure just
+     * means the first video searches again.
+     */
+    private fun restoreClient() {
+        val name = prefs.getString(KEY_CLIENT, null) ?: return
+        runCatching {
+            val service = VideoInfoService.instance()
+            val field = VideoInfoService::class.java.getDeclaredField("mNextClient").apply { isAccessible = true }
+            val client = field.type.enumConstants?.firstOrNull { (it as Enum<*>).name == name } ?: return
+            field.set(service, client)
         }
     }
 }
@@ -95,7 +124,7 @@ class YouTubePlayback(context: Context) {
 private fun MediaItemFormatInfo.hasAdaptiveStreams() =
     containsDashFormats() || containsHlsUrl() || containsDashUrl()
 
-private fun MediaItemFormatInfo.toPlaybackInfo(videoId: String): PlaybackInfo {
+private fun MediaItemFormatInfo.toPlaybackInfo(videoId: String, tries: Int, resolveMs: Long): PlaybackInfo {
     val source = pickSource()
     return PlaybackInfo(
         videoId = videoId,
@@ -114,6 +143,8 @@ private fun MediaItemFormatInfo.toPlaybackInfo(videoId: String): PlaybackInfo {
             )
         },
         clientName = clientInfo?.clientName,
+        clientTries = tries,
+        resolveMs = resolveMs,
     )
 }
 

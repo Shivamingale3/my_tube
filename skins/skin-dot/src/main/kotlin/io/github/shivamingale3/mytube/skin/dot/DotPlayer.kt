@@ -48,12 +48,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.input.key.onKeyEvent
+import io.github.shivamingale3.mytube.player.StreamTrack
 import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.screens.PlayerUiState.Phase
 import io.github.shivamingale3.mytube.skin.PlayerActions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.animateScrollBy
 
-private enum class Sheet { Quality, Speed, Captions }
+private enum class Sheet { Quality, Speed, Captions, Stats }
 
 private const val HIDE_AFTER_MS = 5_000L
 private const val SEEK_STEP_MS = 10_000L
@@ -72,6 +78,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             controlsVisible = false
         }
     }
+    LaunchedEffect(sheet == Sheet.Stats) { actions.showStats(sheet == Sheet.Stats) }
     LaunchedEffect(controlsVisible, started) { if (!controlsVisible || !started) rootFocus.requestFocus() }
 
     Box(
@@ -150,6 +157,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
                     selected = state.caption?.let { c -> state.captions.indexOfFirst { it.id == c.id } + 1 } ?: 0,
                     onPick = { i -> actions.setCaption(if (i == 0) null else state.captions[i - 1]); sheet = null },
                 )
+                Sheet.Stats -> StatsPanel(state)
                 null -> Unit
             }
         }
@@ -247,6 +255,7 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
                     Pill(if (state.caption != null) "CC ON" else "CC", onClick = { onOpen(Sheet.Captions) }, enabled = state.captions.isNotEmpty())
                     Pill("QUALITY", onClick = { onOpen(Sheet.Quality) }, enabled = state.qualities.isNotEmpty())
                     Pill(speedLabel(state.speed), onClick = { onOpen(Sheet.Speed) })
+                    Pill("STATS", onClick = { onOpen(Sheet.Stats) })
                 }
             }
         }
@@ -372,6 +381,85 @@ internal fun OptionSheet(title: String, options: List<String>, selected: Int, on
         }
     }
 }
+
+/**
+ * "Stats for nerds": every stream YouTube offered and whether this TV can play it, plus how long
+ * finding the streams took. Up and down scroll it.
+ */
+@Composable
+internal fun StatsPanel(state: PlayerUiState) {
+    val focus = remember { FocusRequester() }
+    val scroll = rememberScrollState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val stats = state.stats
+    Column(
+        Modifier.width(600.dp).fillMaxHeight()
+            .background(Color(0xF00A0A0A))
+            .border(1.dp, DotColors.SurfaceBorder)
+            .focusRequester(focus)
+            .focusable()
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val step = when (event.key) { Key.DirectionDown -> 120f; Key.DirectionUp -> -120f; else -> return@onKeyEvent false }
+                scope.launch { scroll.animateScrollBy(step) }
+                true
+            }
+            .verticalScroll(scroll)
+            .padding(horizontal = 36.dp, vertical = 44.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("STATS", style = DotType.MatrixNumber, color = DotColors.Text)
+        StatsHeading("STREAMS")
+        StatsLine("Source", state.sourceLabel ?: "—")
+        StatsLine("Found after", state.resolveLabel ?: "—")
+        StatsLine("Waited", state.waitedMs?.let(::seconds) ?: "—")
+        StatsLine("First frame", state.firstFrameMs?.let(::seconds) ?: "—")
+        if (stats == null) return@Column
+        StatsHeading("PLAYBACK")
+        StatsLine("Screen", stats.display)
+        StatsLine("Video decoder", stats.videoDecoder ?: "—")
+        StatsLine("Audio decoder", stats.audioDecoder ?: "—")
+        StatsLine("Bandwidth", "${"%.1f".format(stats.bandwidthKbps / 1000f)} Mbps")
+        StatsLine("Buffered", seconds(stats.bufferedMs))
+        StatsLine("Dropped frames", stats.droppedFrames.toString())
+        StatsHeading("VIDEO · ${stats.video.size}")
+        stats.video.forEach { TrackLine(it) }
+        StatsHeading("AUDIO · ${stats.audio.size}")
+        stats.audio.forEach { TrackLine(it) }
+    }
+}
+
+@Composable
+private fun StatsHeading(text: String) {
+    Text(text, style = DotType.Label, color = DotColors.Accent, modifier = Modifier.padding(top = 18.dp, bottom = 4.dp))
+}
+
+@Composable
+private fun StatsLine(name: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(name.uppercase(), style = DotType.Meta, color = DotColors.TextDim, modifier = Modifier.width(150.dp))
+        Text(value, style = DotType.Meta, color = DotColors.Text)
+    }
+}
+
+@Composable
+private fun TrackLine(track: StreamTrack) {
+    val (status, color) = when (track.support) {
+        StreamTrack.Support.Ok -> "OK" to DotColors.TextMuted
+        StreamTrack.Support.Lifted -> "OK · PAST LIMIT" to DotColors.Sponsor
+        StreamTrack.Support.Unsupported -> "CAN'T PLAY" to DotColors.TextDim
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.size(6.dp).background(if (track.playing) DotColors.Accent else Color.Transparent, CircleShape))
+        Text(track.label.uppercase(), style = DotType.Meta, color = if (track.playing) DotColors.Text else DotColors.TextMuted, modifier = Modifier.width(80.dp))
+        Text(track.codec, style = DotType.Meta, color = DotColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(150.dp))
+        Text("${track.bitrateKbps} kbps", style = DotType.Meta, color = DotColors.TextMuted, modifier = Modifier.width(100.dp))
+        Text(status, style = DotType.Meta, color = color)
+    }
+}
+
+private fun seconds(ms: Long) = "%.1f s".format(ms / 1000f)
 
 /** 1f → "1.0×", 1.25f → "1.25×". */
 private fun speedLabel(speed: Float): String {

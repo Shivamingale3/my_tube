@@ -37,6 +37,8 @@ class PlayerActions(
     val setCaption: (CaptionChoice?) -> Unit,
     val setSpeed: (Float) -> Unit,
     val retry: () -> Unit,
+    /** The stats panel opened (true) or closed; stats are gathered only while it's open. */
+    val showStats: (Boolean) -> Unit = {},
 )
 
 /**
