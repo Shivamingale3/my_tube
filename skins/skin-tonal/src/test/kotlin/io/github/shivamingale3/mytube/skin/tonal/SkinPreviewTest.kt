@@ -96,6 +96,9 @@ class SkinPreviewTest {
     @Test fun dotSettings() = render("dot-settings", DotSkin) { DotSkin.Settings(settings, settingsActions) }
     @Test fun dotHome() = render("dot-home-final", DotSkin) { shell(DotSkin, Tab.Home) { DotSkin.Home(home, HomeActions({}, {})) } }
 
+    @Test fun tonalSkeleton() = render("tonal-skeleton", TonalSkin) { shell(TonalSkin, Tab.Home) { TonalSkin.Home(HomeUiState(), HomeActions({}, {})) } }
+    @Test fun dotSkeleton() = render("dot-skeleton", DotSkin) { shell(DotSkin, Tab.Home) { DotSkin.Home(HomeUiState(), HomeActions({}, {})) } }
+
     @Composable
     private fun thumbnail() = coil3.compose.AsyncImage(
         model = "t_ESABTN4VtrA",

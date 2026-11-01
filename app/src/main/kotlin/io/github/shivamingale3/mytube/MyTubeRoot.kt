@@ -14,7 +14,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,13 +30,10 @@ import io.github.shivamingale3.mytube.skin.ShellState
 import io.github.shivamingale3.mytube.skin.SkinAccent
 import io.github.shivamingale3.mytube.skin.Tab
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
-private const val SPLASH_MIN_MS = 700L
-private const val SPLASH_MAX_MS = 8_000L
+private const val SPLASH_MS = 700L
 
 /** Top-level navigation: splash, the active skin's frame with Home and Search, Settings and the player. */
 @Composable
@@ -69,11 +65,9 @@ fun MyTubeRoot() {
     val voice = rememberVoiceSearch { spoken -> tab = Tab.Search; search.search(spoken) }
 
     if (splash) {
+        // Just long enough to read; Home then shows its own skeleton until the feed arrives.
         LaunchedEffect(Unit) {
-            delay(SPLASH_MIN_MS)
-            withTimeoutOrNull(SPLASH_MAX_MS - SPLASH_MIN_MS) {
-                snapshotFlow { homeState.featured != null || homeState.error != null }.first { it }
-            }
+            delay(SPLASH_MS)
             splash = false
         }
         Splash()
