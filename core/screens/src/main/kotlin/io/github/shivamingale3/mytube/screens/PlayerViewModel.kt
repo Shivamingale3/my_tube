@@ -118,8 +118,7 @@ class PlayerViewModel(
         lastReportAt = openedAt
         val prefs = settings.current
         _state.value = PlayerUiState(video = video, title = video.title, channelName = video.channelName, showStatsButton = prefs.statsButton)
-        // Resume where the account's history left off, unless the video was nearly finished.
-        val startMs = if (prefs.resume && !video.isLive && video.percentWatched in 1..95) video.durationMs * video.percentWatched / 100 else 0L
+        val startMs = if (prefs.resume && !video.isLive) resumePosition(video) else 0L
         openJob = viewModelScope.launch {
             launch {
                 val related = youTube.related(video.id)
@@ -292,6 +291,19 @@ class PlayerViewModel(
     }
 
     private companion object {
+        /**
+         * Where to resume [video] from its watch history: only when it was clearly left partway,
+         * more than a minute in and short of 90%. Otherwise it starts from the beginning.
+         */
+        fun resumePosition(video: Video): Long {
+            if (video.durationMs <= 0 || video.percentWatched !in 1 until RESUME_MAX_PERCENT) return 0L
+            val at = video.durationMs * video.percentWatched / 100
+            return if (at >= RESUME_MIN_MS) at else 0L
+        }
+
+        const val RESUME_MIN_MS = 60_000L
+        const val RESUME_MAX_PERCENT = 90
+
         fun seconds(ms: Long) = "%.1f s".format(ms / 1000f)
 
         const val TICK_MS = 250L
