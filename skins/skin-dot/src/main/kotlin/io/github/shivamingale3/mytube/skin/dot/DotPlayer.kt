@@ -55,6 +55,8 @@ import io.github.shivamingale3.mytube.player.StreamTrack
 import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.screens.PlayerUiState.Phase
 import io.github.shivamingale3.mytube.skin.PlayerActions
+import io.github.shivamingale3.mytube.skin.Scrubber
+import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -70,6 +72,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var inputCount by remember { mutableIntStateOf(0) }
     val rootFocus = remember { FocusRequester() }
+    val scrubber = remember { Scrubber() }
     val started = state.phase == Phase.Ready || state.phase == Phase.Ended || (state.phase == Phase.Buffering && state.positionMs > 0)
 
     LaunchedEffect(inputCount, controlsVisible, sheet, state.isPlaying) {
@@ -78,6 +81,8 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             controlsVisible = false
         }
     }
+    // Controls hiding or a sheet opening ends a seek in progress.
+    LaunchedEffect(controlsVisible, sheet) { if (!controlsVisible || sheet != null) scrubber.commit(actions.seekTo) }
     LaunchedEffect(sheet == Sheet.Stats) { actions.showStats(sheet == Sheet.Stats) }
     LaunchedEffect(controlsVisible, started) { if (!controlsVisible || !started) rootFocus.requestFocus() }
 
@@ -86,6 +91,19 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                val seekKey = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
+                if (seekKey && started && !state.isLive && sheet == null) {
+                    if (event.type == KeyEventType.KeyUp && scrubber.pendingMs != null) {
+                        scrubber.commit(actions.seekTo)
+                        return@onPreviewKeyEvent true
+                    }
+                    if (event.type == KeyEventType.KeyDown && (!controlsVisible || scrubber.barFocused)) {
+                        inputCount++
+                        scrubber.step(event.key == Key.DirectionRight, event.nativeKeyEvent.repeatCount, state.positionMs, state.durationMs)
+                        controlsVisible = true
+                        return@onPreviewKeyEvent true
+                    }
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 inputCount++
                 when {
@@ -120,7 +138,7 @@ internal fun DotPlayer(state: PlayerUiState, actions: PlayerActions, surface: @C
             !started -> LoadingLayer(state)
             else -> {
                 AnimatedVisibility(controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    ControlsLayer(state, actions, onOpen = { sheet = it })
+                    ControlsLayer(state, actions, scrubber, onOpen = { sheet = it })
                 }
                 if (state.phase == Phase.Buffering) {
                     DotLoader(Modifier.align(Alignment.Center))
@@ -210,9 +228,13 @@ private fun BoxScope.ErrorLayer(state: PlayerUiState, actions: PlayerActions) {
 }
 
 @Composable
-private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: (Sheet) -> Unit) {
+private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, onOpen: (Sheet) -> Unit) {
+    // While seeking, everything shows the target position.
+    val state = live.copy(positionMs = scrubber.pendingMs ?: live.positionMs)
+    val barFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { playFocus.requestFocus() }
+    // Like YouTube, the progress bar is selected first, so left and right seek straight away.
+    LaunchedEffect(Unit) { runCatching { if (live.isLive) playFocus.requestFocus() else barFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxWidth().height(360.dp).align(Alignment.BottomCenter)
@@ -241,7 +263,15 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 4.dp, bottom = 22.dp),
             )
-            if (!state.isLive) DotTimeline(state)
+            if (!state.isLive) {
+                DotFocusable(
+                    onClick = actions.togglePlay,
+                    radius = 999.dp,
+                    modifier = Modifier.fillMaxWidth().focusRequester(barFocus).onFocusChanged { scrubber.barFocused = it.isFocused },
+                ) { focused ->
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = if (focused) 10.dp else 4.dp)) { DotTimeline(state, seeking = scrubber.pendingMs != null) }
+                }
+            }
             Row(Modifier.fillMaxWidth().padding(top = 18.dp), verticalAlignment = Alignment.Bottom) {
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(if (state.isLive) "LIVE" else formatTime(state.positionMs), style = DotType.MatrixNumber.copy(fontSize = 88.sp, lineHeight = 80.sp), color = if (state.isLive) DotColors.Accent else DotColors.Text)
@@ -264,7 +294,7 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
 
 /** 96 dots across the screen: watched white, sponsor parts green, the playhead red and larger. */
 @Composable
-private fun DotTimeline(state: PlayerUiState, count: Int = 96) {
+private fun DotTimeline(state: PlayerUiState, count: Int = 96, seeking: Boolean = false) {
     val duration = state.durationMs.coerceAtLeast(1)
     val current = ((state.positionMs * count) / duration).toInt().coerceIn(0, count - 1)
     Row(Modifier.fillMaxWidth().height(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -277,7 +307,7 @@ private fun DotTimeline(state: PlayerUiState, count: Int = 96) {
                 i < current -> DotColors.Text
                 else -> Color(0xFF3A3A3A)
             }
-            Box(Modifier.size(if (i == current) 12.dp else 6.dp).background(color, CircleShape))
+            Box(Modifier.size(if (i == current) (if (seeking) 16.dp else 12.dp) else 6.dp).background(color, CircleShape))
         }
     }
 }

@@ -133,7 +133,7 @@ class DotPreviewTest {
         compose.setContent {
             DesignScale {
                 DotSkin.Theme {
-                    DotSkin.Player(state, PlayerActions({}, {}, {}, {}, {}, {}, {})) {
+                    DotSkin.Player(state, PlayerActions({}, {}, {}, {}, {}, {}, {}, {})) {
                         coil3.compose.AsyncImage(
                             model = "t_NiCgcUTL9_Q",
                             contentDescription = null,

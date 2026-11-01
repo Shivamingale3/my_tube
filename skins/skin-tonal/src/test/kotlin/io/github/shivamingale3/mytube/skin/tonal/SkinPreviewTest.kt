@@ -151,5 +151,5 @@ class SkinPreviewTest {
         playingHeight = 2160,
         sourceLabel = "DASH · VISIONOS",
     )
-    private val playerActions = PlayerActions({}, {}, {}, {}, {}, {}, {})
+    private val playerActions = PlayerActions({}, {}, {}, {}, {}, {}, {}, {})
 }

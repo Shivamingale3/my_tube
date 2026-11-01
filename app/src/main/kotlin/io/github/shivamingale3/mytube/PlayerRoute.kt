@@ -48,6 +48,7 @@ fun PlayerRoute(video: Video, skin: Skin, onBack: () -> Unit, viewModel: PlayerV
     val actions = PlayerActions(
         togglePlay = viewModel::togglePlay,
         seekBy = viewModel::seekBy,
+        seekTo = viewModel::seekTo,
         skipSegment = viewModel::skipSegment,
         setQuality = viewModel::setQuality,
         setCaption = viewModel::setCaption,

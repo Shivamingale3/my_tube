@@ -63,6 +63,7 @@ class SettingsActions(
 class PlayerActions(
     val togglePlay: () -> Unit,
     val seekBy: (deltaMs: Long) -> Unit,
+    val seekTo: (positionMs: Long) -> Unit,
     val skipSegment: () -> Unit,
     val setQuality: (VideoQuality?) -> Unit,
     val setCaption: (CaptionChoice?) -> Unit,

@@ -148,6 +148,11 @@ class PlayerViewModel(
         refresh()
     }
 
+    fun seekTo(positionMs: Long) {
+        controller.seekTo(positionMs)
+        refresh()
+    }
+
     fun skipSegment() {
         val segment = _state.value.activeSegment ?: return
         skipped += segment

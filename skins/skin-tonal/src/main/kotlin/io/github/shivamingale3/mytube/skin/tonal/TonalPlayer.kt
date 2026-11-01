@@ -56,6 +56,8 @@ import io.github.shivamingale3.mytube.player.StreamTrack
 import io.github.shivamingale3.mytube.screens.PlayerUiState
 import io.github.shivamingale3.mytube.screens.PlayerUiState.Phase
 import io.github.shivamingale3.mytube.skin.PlayerActions
+import io.github.shivamingale3.mytube.skin.Scrubber
+import androidx.compose.ui.focus.onFocusChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -74,6 +76,7 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var inputCount by remember { mutableIntStateOf(0) }
     val rootFocus = remember { FocusRequester() }
+    val scrubber = remember { Scrubber() }
     val started = state.phase == Phase.Ready || state.phase == Phase.Ended || (state.phase == Phase.Buffering && state.positionMs > 0)
 
     LaunchedEffect(inputCount, controlsVisible, sheet, state.isPlaying) {
@@ -82,6 +85,8 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
             controlsVisible = false
         }
     }
+    // Controls hiding or a sheet opening ends a seek in progress.
+    LaunchedEffect(controlsVisible, sheet) { if (!controlsVisible || sheet != null) scrubber.commit(actions.seekTo) }
     LaunchedEffect(sheet == Sheet.Stats) { actions.showStats(sheet == Sheet.Stats) }
     LaunchedEffect(controlsVisible, started) { if (!controlsVisible || !started) runCatching { rootFocus.requestFocus() } }
 
@@ -90,6 +95,19 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
+                val seekKey = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
+                if (seekKey && started && !state.isLive && sheet == null) {
+                    if (event.type == KeyEventType.KeyUp && scrubber.pendingMs != null) {
+                        scrubber.commit(actions.seekTo)
+                        return@onPreviewKeyEvent true
+                    }
+                    if (event.type == KeyEventType.KeyDown && (!controlsVisible || scrubber.barFocused)) {
+                        inputCount++
+                        scrubber.step(event.key == Key.DirectionRight, event.nativeKeyEvent.repeatCount, state.positionMs, state.durationMs)
+                        controlsVisible = true
+                        return@onPreviewKeyEvent true
+                    }
+                }
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 inputCount++
                 when {
@@ -124,7 +142,7 @@ internal fun TonalPlayer(state: PlayerUiState, actions: PlayerActions, surface: 
             !started -> LoadingLayer(state)
             else -> {
                 AnimatedVisibility(controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    ControlsLayer(state, actions, onOpen = { sheet = it })
+                    ControlsLayer(state, actions, scrubber, onOpen = { sheet = it })
                 }
                 if (state.phase == Phase.Buffering) TonalLoader(Modifier.align(Alignment.Center))
             }
@@ -199,9 +217,13 @@ private fun BoxScope.ErrorLayer(state: PlayerUiState, actions: PlayerActions) {
 }
 
 @Composable
-private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: (Sheet) -> Unit) {
+private fun ControlsLayer(live: PlayerUiState, actions: PlayerActions, scrubber: Scrubber, onOpen: (Sheet) -> Unit) {
+    // While seeking, everything shows the target position.
+    val state = live.copy(positionMs = scrubber.pendingMs ?: live.positionMs)
+    val barFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }
+    // Like YouTube, the progress bar is selected first, so left and right seek straight away.
+    LaunchedEffect(Unit) { runCatching { if (live.isLive) playFocus.requestFocus() else barFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().height(320.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f))))
         Column(
@@ -224,12 +246,18 @@ private fun ControlsLayer(state: PlayerUiState, actions: PlayerActions, onOpen: 
                 } else {
                     val duration = state.durationMs.coerceAtLeast(1)
                     Text(formatDuration(state.positionMs), style = TonalType.Chip, color = TonalColors.Muted)
-                    WavyProgress(
-                        progress = state.positionMs.toFloat() / duration,
-                        segments = state.segments.map { it.startMs.toFloat() / duration to it.endMs.toFloat() / duration },
-                        animate = state.isPlaying,
-                        modifier = Modifier.weight(1f),
-                    )
+                    TonalFocusable(
+                        onClick = actions.togglePlay,
+                        radius = 999.dp,
+                        modifier = Modifier.weight(1f).focusRequester(barFocus).onFocusChanged { scrubber.barFocused = it.isFocused },
+                    ) { focused ->
+                        WavyProgress(
+                            progress = state.positionMs.toFloat() / duration,
+                            segments = state.segments.map { it.startMs.toFloat() / duration to it.endMs.toFloat() / duration },
+                            animate = state.isPlaying && scrubber.pendingMs == null,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (focused) 10.dp else 2.dp),
+                        )
+                    }
                     Text(formatDuration(state.durationMs), style = TonalType.Chip, color = TonalColors.Muted)
                 }
             }
