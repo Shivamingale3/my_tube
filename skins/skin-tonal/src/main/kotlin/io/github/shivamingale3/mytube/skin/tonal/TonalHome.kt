@@ -1,5 +1,13 @@
 package io.github.shivamingale3.mytube.skin.tonal
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.getValue
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +46,7 @@ private val HeroShape = RoundedCornerShape(32.dp)
 @Composable
 internal fun TonalHome(state: HomeUiState, actions: HomeActions) {
     when {
-        state.loading && state.featured == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { TonalLoader() }
+        state.loading && state.featured == null -> TonalHomeSkeleton()
         state.error != null && state.featured == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Can't load Home\n${state.error}", style = TonalType.Section, color = TonalColors.Muted)
         }
@@ -122,3 +130,32 @@ private fun VideoRowSection(row: VideoRow, actions: HomeActions) {
         }
     }
 }
+
+/** Home's layout in grey while the feed loads; one shared pulse keeps it cheap. */
+@Composable
+private fun TonalHomeSkeleton() {
+    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val block = Modifier.background(SkeletonGrey, RoundedCornerShape(20.dp))
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 64.dp).graphicsLayer { alpha = pulse },
+        verticalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().height(368.dp).background(SkeletonGrey, HeroShape))
+        Box(Modifier.size(200.dp, 20.dp).then(block))
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            repeat(5) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(280.dp, 158.dp).then(block))
+                    Box(Modifier.size(210.dp, 15.dp).then(block))
+                }
+            }
+        }
+    }
+}
+
+private val SkeletonGrey = Color(0xFF1C1C1C)

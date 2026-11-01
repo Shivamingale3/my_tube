@@ -1,5 +1,13 @@
 package io.github.shivamingale3.mytube.skin.dot
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.getValue
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +51,7 @@ internal val RowCardWidth = 280.dp
 @Composable
 internal fun DotHome(state: HomeUiState, actions: HomeActions) {
     when {
-        state.loading && state.featured == null -> Centered("LOADING", DotColors.Text)
+        state.loading && state.featured == null -> DotHomeSkeleton()
         state.error != null && state.featured == null -> Centered("CAN'T LOAD HOME\n${state.error}", DotColors.Accent)
         else -> LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -241,3 +249,38 @@ private fun Video.minutesLeft(): Long? {
     if (durationMs <= 0) return null
     return ((durationMs * (100 - percentWatched) / 100) / 60_000).coerceAtLeast(1)
 }
+
+/** Home's layout in grey while the feed loads; one shared pulse keeps it cheap. */
+@Composable
+private fun DotHomeSkeleton() {
+    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val block = Modifier.background(SkeletonGrey, RoundedCornerShape(18.dp))
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 48.dp).graphicsLayer { alpha = pulse },
+        verticalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.size(760.dp, 360.dp).background(SkeletonGrey, CardShape))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.size(408.dp, 172.dp).background(SkeletonGrey, CardShape))
+                Box(Modifier.size(408.dp, 172.dp).background(SkeletonGrey, CardShape))
+            }
+        }
+        Box(Modifier.size(160.dp, 12.dp).then(block))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            repeat(5) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(RowCardWidth, RowCardWidth * 9 / 16).then(block))
+                    Box(Modifier.size(RowCardWidth * 3 / 4, 14.dp).then(block))
+                }
+            }
+        }
+    }
+}
+
+private val SkeletonGrey = Color(0xFF1C1C1C)
