@@ -183,6 +183,19 @@ Toolchain: AGP 8.13, Kotlin 2.3, Gradle 8.14, JDK 17, compileSdk 36, minSdk 26, 
 - Back order in the player: close sheet → close shelf → hide controls → leave player.
 - Use `Modifier.restoreFocus(video.id)` on anything that plays a video from Home or Search.
 
+### Voice search
+
+- The mic button in Search (both skins) listens inside the app with Android's `SpeechRecognizer`
+  (`AndroidSpeechInput`), not a system dialog. Live words show in the query line/field; when
+  speech ends the result is searched at once, with no manual submit. Only the on-screen mic exists;
+  the remote's mic key isn't handled.
+- The TV needs a speech service. On the Mi TV that is `com.google.android.katniss`. A debloat script
+  had disabled it (`pm disable-user`), which makes Android hide every recognizer and the app shows
+  "voice search isn't available". Fix: `adb shell pm enable com.google.android.katniss`.
+  `pm query-services` doesn't work on Android 9; use `dumpsys package` and look for
+  `android.speech.RecognitionService`.
+- The mic permission is asked on first press. `adb shell pm grant io.github.shivamingale3.mytube android.permission.RECORD_AUDIO` skips the dialog.
+
 ## Debugging on the TV
 
 - **STATS** button in the player (toggle in Settings → Playback). It shows the source and client

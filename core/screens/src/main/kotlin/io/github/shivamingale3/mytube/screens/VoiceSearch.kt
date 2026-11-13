@@ -21,7 +21,7 @@ sealed interface VoiceState {
 
 /**
  * Voice input for the search field. Pressing the mic starts listening, pressing it again stops;
- * what was heard goes to [onHeard] (the search field) and is not searched until confirmed.
+ * what was heard goes to [onHeard], which searches for it straight away.
  */
 class VoiceSearch(
     private val speech: SpeechInput,
