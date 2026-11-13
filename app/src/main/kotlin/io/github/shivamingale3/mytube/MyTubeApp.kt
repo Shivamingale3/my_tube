@@ -6,7 +6,9 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import io.github.shivamingale3.mytube.screens.AndroidSpeechInput
 import io.github.shivamingale3.mytube.screens.AppSettings
+import io.github.shivamingale3.mytube.screens.SpeechInput
 import io.github.shivamingale3.mytube.screens.HomeViewModel
 import io.github.shivamingale3.mytube.screens.SearchViewModel
 import io.github.shivamingale3.mytube.screens.PlayerViewModel
@@ -45,10 +47,11 @@ private val appModule = module {
     single { YouTubePlayback(androidContext()) }
     single { PlayerController(androidContext()) }
     single { AppSettings(androidContext()) }
+    single<SpeechInput> { AndroidSpeechInput(androidContext()) }
     single { AppUpdater(androidContext()) }
     viewModel { ShellViewModel(get()) }
     viewModel { HomeViewModel(get(), get()) }
-    viewModel { SearchViewModel(get(), get()) }
+    viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get()) }
     viewModel { PlayerViewModel(get(), get(), get(), get()) }
 }

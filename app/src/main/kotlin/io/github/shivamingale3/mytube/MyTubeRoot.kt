@@ -1,8 +1,7 @@
 package io.github.shivamingale3.mytube
 
-import android.app.Activity
-import android.content.Intent
-import android.speech.RecognizerIntent
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -70,7 +69,7 @@ fun MyTubeRoot() {
         if (accountVersion > 0) shell.refresh(onChanged = home::refresh)
     }
 
-    val voice = rememberVoiceSearch { spoken -> tab = Tab.Search; search.search(spoken) }
+    val voice = rememberVoiceButton(onGranted = search::toggleVoice, onDenied = search::voiceDenied)
 
     if (splash) {
         // Just long enough to read; Home then shows its own skeleton until the feed arrives.
@@ -126,6 +125,7 @@ fun MyTubeRoot() {
                                     play = play,
                                     focus = search::onFocus,
                                     voice = voice,
+                                    cancelVoice = search::cancelVoice,
                                 ),
                             ) }
                         }
@@ -137,20 +137,18 @@ fun MyTubeRoot() {
     }
 }
 
-/** Android's speech recognizer as a one-tap action, or null when the TV has none. */
+/**
+ * The mic button's action: listen right away when the microphone is allowed, otherwise ask once
+ * (Android shows its own dialog) and listen if the answer is yes.
+ */
 @Composable
-private fun rememberVoiceSearch(onResult: (String) -> Unit): (() -> Unit)? {
+private fun rememberVoiceButton(onGranted: () -> Unit, onDenied: () -> Unit): () -> Unit {
     val context = LocalContext.current
-    val intent = remember {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_WEB_SEARCH)
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Search YouTube")
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onGranted() else onDenied()
     }
-    val available = remember { context.packageManager.queryIntentActivities(intent, 0).isNotEmpty() }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let(onResult)
-        }
+    return {
+        val allowed = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (allowed) onGranted() else runCatching { launcher.launch(Manifest.permission.RECORD_AUDIO) }.onFailure { onDenied() }
     }
-    return if (available) ({ runCatching { launcher.launch(intent) } }) else null
 }

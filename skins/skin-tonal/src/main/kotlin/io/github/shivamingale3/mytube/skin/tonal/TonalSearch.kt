@@ -1,5 +1,6 @@
 package io.github.shivamingale3.mytube.skin.tonal
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.screens.SearchUiState
+import io.github.shivamingale3.mytube.screens.VoiceState
 import io.github.shivamingale3.mytube.skin.LocalFocusRestore
 import io.github.shivamingale3.mytube.skin.SearchActions
 import io.github.shivamingale3.mytube.skin.restoreFocus
@@ -49,6 +52,8 @@ internal fun TonalSearch(state: SearchUiState, actions: SearchActions) {
     val field = remember { FocusRequester() }
     val restoring = LocalFocusRestore.current.videoId != null
     LaunchedEffect(Unit) { if (!restoring) runCatching { field.requestFocus() } }
+    // Stop listening when Search is left (another tab, a played video).
+    DisposableEffect(Unit) { onDispose { actions.cancelVoice() } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 64.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         SearchField(state, actions, field)
@@ -86,24 +91,48 @@ private fun SearchField(state: SearchUiState, actions: SearchActions, focus: Foc
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         TonalIcon(Icon.Search, TonalColors.Muted, Modifier.size(22.dp))
+        val voice = state.voice
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (state.query.isEmpty()) Text("Search", style = TonalType.Section.copy(fontSize = 22.sp), color = TonalColors.Dim)
-            BasicTextField(
-                value = state.query,
-                onValueChange = actions.type,
-                singleLine = true,
-                textStyle = TonalType.Section.copy(fontSize = 22.sp, color = TonalColors.Text),
-                cursorBrush = SolidColor(TonalColors.Accent),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { actions.search(state.query) }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused },
-            )
-        }
-        actions.voice?.let { voice ->
-            TonalFocusable(onClick = voice, radius = 999.dp) { f ->
-                Box(Modifier.size(48.dp).background(if (f) TonalColors.Accent else TonalColors.Text, CircleShape), contentAlignment = Alignment.Center) {
-                    TonalIcon(Icon.Mic, if (f) TonalColors.OnAccent else Color.Black, Modifier.size(22.dp))
+            when {
+                // Live words while speaking, then a short message if it failed; the field returns after.
+                voice is VoiceState.Listening -> Text(
+                    voice.heard.ifEmpty { "Listening…" },
+                    style = TonalType.Section.copy(fontSize = 22.sp),
+                    color = if (voice.heard.isEmpty()) TonalColors.Accent else TonalColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                voice is VoiceState.Failed -> Text(voice.message, style = TonalType.Section.copy(fontSize = 22.sp), color = TonalColors.Accent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                else -> {
+                    if (state.query.isEmpty()) Text("Search", style = TonalType.Section.copy(fontSize = 22.sp), color = TonalColors.Dim)
+                    BasicTextField(
+                        value = state.query,
+                        onValueChange = actions.type,
+                        singleLine = true,
+                        textStyle = TonalType.Section.copy(fontSize = 22.sp, color = TonalColors.Text),
+                        cursorBrush = SolidColor(TonalColors.Accent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { actions.search(state.query) }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { focused = it.isFocused },
+                    )
                 }
+            }
+        }
+        MicButton(voice, actions.voice)
+    }
+}
+
+/** The mic: white when idle, accent while listening with a ring that swells with the voice. */
+@Composable
+private fun MicButton(voice: VoiceState, onClick: () -> Unit) {
+    val listening = voice is VoiceState.Listening
+    val ring by animateDpAsState(if (voice is VoiceState.Listening) (voice.level * 4).dp else 0.dp, label = "micRing")
+    Box(contentAlignment = Alignment.Center) {
+        if (listening) Box(Modifier.size(48.dp + ring * 2).background(TonalColors.Accent.copy(alpha = 0.3f), CircleShape))
+        TonalFocusable(onClick = onClick, radius = 999.dp) { f ->
+            val lit = f || listening
+            Box(Modifier.size(48.dp).background(if (lit) TonalColors.Accent else TonalColors.Text, CircleShape), contentAlignment = Alignment.Center) {
+                TonalIcon(Icon.Mic, if (lit) TonalColors.OnAccent else Color.Black, Modifier.size(22.dp))
             }
         }
     }

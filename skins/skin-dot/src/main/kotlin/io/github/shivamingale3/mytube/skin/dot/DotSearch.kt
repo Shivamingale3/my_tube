@@ -1,5 +1,6 @@
 package io.github.shivamingale3.mytube.skin.dot
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import io.github.shivamingale3.mytube.screens.SearchUiState
+import io.github.shivamingale3.mytube.screens.VoiceState
 import io.github.shivamingale3.mytube.model.Video
 import io.github.shivamingale3.mytube.skin.LocalFocusRestore
 import io.github.shivamingale3.mytube.skin.SearchActions
@@ -43,6 +47,8 @@ internal fun DotSearch(state: SearchUiState, actions: SearchActions) {
     val firstKey = remember { FocusRequester() }
     val restoring = LocalFocusRestore.current.videoId != null
     LaunchedEffect(Unit) { if (!restoring) runCatching { firstKey.requestFocus() } }
+    // Stop listening when Search is left (another tab, a played video).
+    DisposableEffect(Unit) { onDispose { actions.cancelVoice() } }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp)) {
         QueryLine(state)
@@ -63,19 +69,37 @@ private fun QueryLine(state: SearchUiState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        val voice = state.voice
         val empty = state.query.isEmpty()
+        // While listening the line shows the words heard so far; a failure shows its message here.
+        val shown = when {
+            voice is VoiceState.Listening -> voice.heard.ifEmpty { "LISTENING" }
+            voice is VoiceState.Failed -> voice.message
+            empty -> "SEARCH"
+            else -> state.query
+        }
+        val quiet = (voice is VoiceState.Listening && voice.heard.isEmpty()) || (voice !is VoiceState.Listening && voice !is VoiceState.Failed && empty)
         Text(
-            if (empty) "SEARCH" else state.query.uppercase(),
-            style = DotType.MatrixNumber.copy(fontSize = 64.sp, lineHeight = 60.sp),
-            color = if (empty) Color(0xFF3A3A3A) else DotColors.Text,
+            shown.uppercase(),
+            style = DotType.MatrixNumber.copy(fontSize = if (voice is VoiceState.Failed) 36.sp else 64.sp, lineHeight = 60.sp),
+            color = when {
+                voice is VoiceState.Failed -> DotColors.Accent
+                voice is VoiceState.Listening && voice.heard.isEmpty() -> DotColors.Accent
+                quiet -> Color(0xFF3A3A3A)
+                else -> DotColors.Text
+            },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        Box(Modifier.size(28.dp, 52.dp).background(DotColors.Accent))
+        // The block cursor grows with the voice while listening.
+        val level = (voice as? VoiceState.Listening)?.level ?: 0
+        val cursor by animateDpAsState(if (voice is VoiceState.Listening) (24 + level * 7).dp else 52.dp, label = "cursor")
+        Box(Modifier.size(28.dp, cursor).background(DotColors.Accent))
         Spacer(Modifier.weight(1f))
         Text(
             when {
+                voice is VoiceState.Listening -> "LISTENING · PRESS MIC TO FINISH"
                 state.loading -> "SEARCHING"
                 state.searched != null -> "${state.results.size} RESULTS"
                 else -> "TYPE, PICK A SUGGESTION OR SPEAK"
@@ -104,7 +128,8 @@ private fun Keyboard(state: SearchUiState, actions: SearchActions, firstKey: Foc
             Pill("SPACE", onClick = { actions.type(state.query + " ") })
             Pill("DEL", onClick = { actions.type(state.query.dropLast(1)) }, enabled = state.query.isNotEmpty())
             Pill("CLEAR", onClick = { actions.type("") }, enabled = state.query.isNotEmpty())
-            actions.voice?.let { Pill("MIC", onClick = it) }
+            val listening = state.voice is VoiceState.Listening
+            Pill(if (listening) "STOP" else "MIC", onClick = actions.voice, filled = listening)
         }
         Row(Modifier.padding(top = 6.dp)) {
             Pill("SEARCH", onClick = { actions.search(state.query) }, enabled = state.query.isNotBlank(), filled = state.query.isNotBlank())
