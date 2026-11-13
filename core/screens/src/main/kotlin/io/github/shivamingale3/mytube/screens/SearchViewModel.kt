@@ -37,8 +37,8 @@ class SearchViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState())
 
-    // What was heard goes into the search field, like typing; it is searched when the person confirms.
-    private val voice = VoiceSearch(speech, viewModelScope) { heard -> type(heard) }
+    // What was heard is searched straight away; there is no manual submit after speaking.
+    private val voice = VoiceSearch(speech, viewModelScope) { heard -> search(heard) }
 
     val state: StateFlow<SearchUiState> = combine(_state, voice.state) { s, v -> s.copy(voice = v) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, SearchUiState())
