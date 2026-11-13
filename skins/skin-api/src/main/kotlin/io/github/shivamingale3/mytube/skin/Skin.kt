@@ -46,8 +46,10 @@ class SearchActions(
     val search: (String) -> Unit,
     val play: (Video) -> Unit,
     val focus: (Video) -> Unit = {},
-    /** Starts voice input; null when the TV has no speech recognizer. */
-    val voice: (() -> Unit)? = null,
+    /** The mic button: starts listening, or finishes if already listening. */
+    val voice: () -> Unit = {},
+    /** Stops listening; call it when Search leaves the screen. */
+    val cancelVoice: () -> Unit = {},
 )
 
 class SettingsActions(
